@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "203811797318",
+    "project_id": "medigo-f2fd5",
+    "storage_bucket": "medigo-f2fd5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:203811797318:android:99bf29345e5a8d6ba90d47",
+        "android_client_info": {
+          "package_name": "com.example.hopital_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqXX3stwFTWCJWzr3gq2j9wWKAm8_xi2o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
