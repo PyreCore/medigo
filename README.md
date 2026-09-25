@@ -1,17 +1,51 @@
-# hopital_app
+# Medigo — Application mobile de gestion hospitalière
 
-A new Flutter project.
+Application mobile **Flutter** pour la gestion hospitalière : administration des hôpitaux, des spécialités et des médecins. Construite avec **Firebase** pour l'authentification et les données.
 
-## Getting Started
+> Projet en cours de développement (v1).
 
-This project is a starting point for a Flutter application.
+## Fonctionnalités
 
-A few resources to get you started if this is your first Flutter project:
+| Module | Rôle |
+| --- | --- |
+| `lib/admin/` | Tableau de bord administrateur : gestion des hôpitaux et des spécialités |
+| `lib/adminHopital/` | Tableau de bord de l'administrateur d'un hôpital |
+| `lib/medecin/` | Tableau de bord du médecin |
+| `lib/shared/` | Éléments partagés (écran de connexion…) |
+| `lib/main.dart` | Point d'entrée + routes (`/login`, tableaux de bord…) |
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Technologies
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Flutter** (Dart) — application multi-plateforme (Android, iOS, web, desktop)
+- **Firebase** — initialisation (`firebase_options.dart`), authentification et base de données (`firebase.json`)
+
+## Structure
+
+```
+lib/
+├── main.dart                    # Démarrage + routes
+├── firebase_options.dart        # Configuration Firebase
+├── admin/                       # Administration globale (hôpitaux, spécialités)
+│   └── screens/
+├── adminHopital/                # Administration d'un hôpital
+│   └── screens/
+├── medecin/                     # Espace médecin
+│   └── screens/
+└── shared/                      # Écrans et widgets partagés
+```
+
+## Démarrage
+
+```bash
+# Récupérer les dépendances
+flutter pub get
+
+# Configurer Firebase (fichier de configuration adapté à votre projet)
+# puis lancer l'application
+flutter run
+```
+
+## Notes
+
+- Nécessite Flutter SDK et un projet Firebase configuré (`firebase.json`, `firebase_options.dart`).
+- Le README par défaut de Flutter a été remplacé par le présent document ; voir `pubspec.yaml` pour le descriptif technique (package `hopital_app`).
