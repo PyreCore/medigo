@@ -3,7 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../admin/screens/admin_dashboard.dart';
 import '../../adminHopital/screens/admin_hopital_dashboard.dart';
-import '../../medecin/screens/medecin_dashboard.dart';
+// Correction (Étudiant 2) : l'écran "medecin_dashboard.dart" n'existe pas
+// dans le dépôt, il ne compile pas. L'écran d'entrée réel du médecin est
+// MedecinHomeLoader (il charge le profil + les rendez-vous, puis affiche
+// EspaceMedecin).
+import '../../medecin/screens/medecin_home_loader.dart';
+// Ajout (Étudiant 2) : le secrétaire avait AUCUNE branche dans ce switch —
+// il tombait dans le "else" et ne pouvait jamais entrer dans son espace.
+import '../../secretaire/screens/secretaire_home_loader.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,7 +54,25 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-      String role = userData['role'] ?? '';
+
+      // 🔎 DEBUG — à SUPPRIMER avant la soutenance.
+      // Affiche les données brutes du profil pour vérifier le rôle lu
+      // (repère un éventuel espace parasite dans le nom du champ "role").
+      print('DONNEES RECUES : ${userDoc.data()}');
+
+      // Lecture ROBUSTE du rôle (Étudiant 2) :
+      // - on tolère une espace parasite en FIN du nom du champ Firestore
+      //   (le vrai champ s'appelle "role" mais une faute de frappe en
+      //   ajouterait une espace invisible → userData['role'] vaudrait
+      //   null et le rôle ne serait jamais reconnu) ;
+      // - on trim() aussi la VALEUR pour la même raison.
+      final cleRole = userData.keys.firstWhere(
+        (cle) => cle.trim() == 'role',
+        orElse: () => '',
+      );
+      String role = cleRole.isEmpty
+          ? ''
+          : (userData[cleRole] ?? '').toString().trim();
 
       if (!mounted) return;
 
@@ -67,10 +92,22 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       } else if (role == 'medecin') {
+        // Correction (Étudiant 2) : MedecinDashboard n'existe pas →
+        // redirection vers MedecinHomeLoader, la vraie entrée du médecin.
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const MedecinDashboard(),
+            builder: (context) => const MedecinHomeLoader(),
+          ),
+        );
+      } else if (role == 'secretaire') {
+        // Ajout (Étudiant 2) : sans cette branche, un secrétaire voyait
+        // « Vous n'avez pas les droits d'administration » et ne pouvait
+        // pas tester l'espace secrétaire.
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SecretaireHomeLoader(),
           ),
         );
       } else {
