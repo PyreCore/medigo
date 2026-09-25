@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../medecin/screens/medecin_home_loader.dart';
-import '../../secretaire/screens/secretaire_home_loader.dart';
+import '../../admin/screens/admin_dashboard.dart';
+import '../../adminHopital/screens/admin_hopital_dashboard.dart';
+import '../../medecin/screens/medecin_dashboard.dart';
 
-/// Écran de connexion, point d'entrée de l'application (route '/login'
-/// dans main.dart). Après une connexion réussie, on va chercher le champ
-/// "role" du document utilisateur dans Firestore (collection "users",
-/// voir la note d'architecture dans medecin_service.dart) et on redirige
-/// vers l'espace correspondant.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -17,158 +13,148 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _controllerEmail = TextEditingController();
-  final _controllerMotDePasse = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
+  final _db = FirebaseFirestore.instance;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _erreur;
 
-  // "true" pendant qu'une tentative de connexion est en cours, pour
-  // afficher un indicateur de chargement et désactiver le bouton
-  // (évite que l'utilisateur clique plusieurs fois par impatience).
-  bool _enCours = false;
+  Future<void> _connecter() async {
+    setState(() {
+      _isLoading = true;
+      _erreur = null;
+    });
 
-  @override
-  void dispose() {
-    _controllerEmail.dispose();
-    _controllerMotDePasse.dispose();
-    super.dispose();
-  }
-
-  Future<void> _seConnecter() async {
-    if (_controllerEmail.text.trim().isEmpty ||
-        _controllerMotDePasse.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Merci de renseigner email et mot de passe')),
-      );
-      return;
-    }
-
-    setState(() => _enCours = true);
-
-    // "try/catch" : Firebase Auth lance une exception si les identifiants
-    // sont invalides (mauvais mot de passe, compte inexistant...). On
-    // "attrape" cette erreur pour afficher un message clair plutôt que
-    // de laisser l'application planter.
     try {
-      // Étape 1 : authentification via Firebase Auth.
-      final credential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-            email: _controllerEmail.text.trim(),
-            password: _controllerMotDePasse.text,
-          );
+      UserCredential result = await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-      // Étape 2 : on va chercher le document Firestore correspondant à
-      // cet utilisateur (même uid), pour connaître son rôle.
-      final uid = credential.user!.uid;
-      final doc = await FirebaseFirestore.instance
+      DocumentSnapshot userDoc = await _db
           .collection('users')
-          .doc(uid)
+          .doc(result.user!.uid)
           .get();
 
-      if (!doc.exists) {
-        throw Exception('Profil utilisateur introuvable dans Firestore');
+      if (!userDoc.exists) {
+        setState(() {
+          _erreur = 'Aucun profil trouve pour cet utilisateur';
+          _isLoading = false;
+        });
+        return;
       }
 
-      final role = doc.data()?['role'];
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      String role = userData['role'] ?? '';
 
-      // "if (!mounted) return;" : bonne pratique après un "await" dans
-      // un State : vérifie que l'écran est toujours affiché avant de
-      // naviguer (l'utilisateur pourrait avoir quitté l'écran entre
-      // temps, ce qui provoquerait un crash sinon).
       if (!mounted) return;
 
-      // Étape 3 : redirection selon le rôle. Navigator.pushReplacement
-      // (et pas Navigator.push) remplace l'écran de connexion dans la
-      // pile de navigation, pour qu'un retour arrière ne ramène pas
-      // au formulaire de connexion.
-      switch (role) {
-        case 'medecin':
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const MedecinHomeLoader()),
-          );
-          break;
-        case 'secretaire':
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const SecretaireHomeLoader()),
-          );
-          break;
-        // TODO (équipe) : brancher ici les redirections vers les espaces
-        // 'admin' et 'adminHopital' une fois leurs écrans principaux
-        // identifiés (voir lib/admin/screens/ et lib/adminHopital/screens/).
-        default:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rôle non reconnu ou pas encore géré : $role')),
-          );
+      if (role == 'adminSysteme') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminSystemeDashboard(),
+          ),
+        );
+      } else if (role == 'adminHopital') {
+        String hopitalId = userData['hopitalId'] ?? '';
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AdminHopitalDashboard(hopitalId: hopitalId),
+          ),
+        );
+      } else if (role == 'medecin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MedecinDashboard(),
+          ),
+        );
+      } else {
+        setState(() {
+          _erreur = 'Vous n\'avez pas les droits d\'administration';
+          _isLoading = false;
+        });
       }
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connexion échouée : ${e.message ?? e.code}')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
-    } finally {
-      // "finally" s'exécute TOUJOURS, que ça ait réussi ou échoué,
-      // pour être sûr de désactiver l'indicateur de chargement.
-      if (mounted) setState(() => _enCours = false);
+      setState(() {
+        _erreur = 'Email ou mot de passe incorrect';
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Medigo',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+      appBar: AppBar(
+        title: const Text('Connexion Admin'),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline, size: 80, color: Colors.deepPurple),
+            const SizedBox(height: 32),
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.email),
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _controllerEmail,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Mot de passe',
+                prefixIcon: const Icon(Icons.lock),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _controllerMotDePasse,
-                obscureText: true, // masque le mot de passe à l'écran
-                decoration: const InputDecoration(
-                  labelText: 'Mot de passe',
-                  border: OutlineInputBorder(),
+            ),
+            if (_erreur != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  _erreur!,
+                  style: const TextStyle(color: Colors.red),
                 ),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  // Si _enCours est vrai, onPressed vaut null : le bouton
-                  // est automatiquement désactivé le temps de la requête.
-                  onPressed: _enCours ? null : _seConnecter,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: _enCours
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Se connecter'),
-                  ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _connecter,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
                 ),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        'Se connecter',
+                        style: TextStyle(fontSize: 18),
+                      ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
