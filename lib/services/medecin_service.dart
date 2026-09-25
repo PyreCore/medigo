@@ -74,64 +74,53 @@ class MedecinService {
 
   /// Récupère les rendez-vous du médecin pour la date d'aujourd'hui,
   /// triés par heure.
+  ///
+  /// Le filtre sur la journée et le tri sont faits EN DART, pas par
+  /// Firestore. Une requête "where(medecinId) + where(date >=) +
+  /// where(date <) + orderBy(date)" exigerait un INDEX COMPOSITE créé
+  /// à la main dans la console Firebase ; sans lui, Firestore renvoie
+  /// l'erreur "cloud_firestore/failed-precondition : The query requires
+  /// an index" et BLOQUE la connexion à l'espace médecin. Une requête
+  /// à UN seul filtre d'égalité n'a besoin d'aucun index supplémentaire.
   Future<List<RendezVous>> getRendezVousDuJour(String medecinId) async {
-    // DateTime.now() donne la date et l'heure actuelles exactes
-    // (ex: 17 septembre 2026, 14h32min07s).
+    // "minuit aujourd'hui" (année/mois/jour seulement) et "minuit demain"
+    // : l'intervalle [debut, fin[ couvre toute la journée.
     final debutJour = DateTime.now();
-
-    // On construit "minuit aujourd'hui" en ne gardant que année/mois/jour
-    // (on ignore heure/minute/seconde, qui valent 0 par défaut si omis).
     final debut = DateTime(debutJour.year, debutJour.month, debutJour.day);
-
-    // "minuit demain" = minuit aujourd'hui + 1 jour.
-    // Ça nous donne un intervalle [debut, fin[ qui couvre toute la journée.
     final fin = debut.add(const Duration(days: 1));
 
-    // On interroge Firestore avec plusieurs conditions enchaînées (une requête).
+    // Requête SIMPLE : un seul filtre d'égalité → aucun index à créer.
     final snapshot = await _db
         .collection('rendez_vous')
-        // On ne garde que les documents où le champ medecinId correspond
-        // au médecin demandé (chaque médecin ne voit que SES rendez-vous).
+        // Chaque médecin ne voit que SES rendez-vous.
         .where('medecinId', isEqualTo: medecinId)
-        // On ne garde que les rendez-vous dont la date est >= début de journée...
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(debut))
-        // ...ET strictement < début du jour suivant (donc dans la journée).
-        // Timestamp.fromDate() convertit un DateTime Dart au format que
-        // Firestore comprend et stocke en base.
-        .where('date', isLessThan: Timestamp.fromDate(fin))
-        // On trie les résultats par date croissante (les plus tôt en premier).
-        .orderBy('date')
-        // .get() exécute réellement la requête et télécharge les résultats.
         .get();
 
-    // snapshot.docs est la liste des documents trouvés.
-    // .map(...) transforme CHAQUE document en un objet RendezVous,
-    // un peu comme une "traduction" appliquée à toute la liste d'un coup.
-    return snapshot.docs.map((doc) {
-      // Pour chaque document, on récupère ses champs sous forme de Map.
+    // Conversion document → objet RendezVous ("traduction" des champs).
+    final liste = snapshot.docs.map((doc) {
       final data = doc.data();
-
-      // On construit un RendezVous à partir de ces champs, en adaptant
-      // les noms/formats Firestore vers ce qu'attend RendezVous.fromJson.
       return RendezVous.fromJson({
         'id': doc.id,
         'patient_nom': data['patientNom'],
         'patient_prenom': data['patientPrenom'],
-
-        // Le champ "date" est stocké comme un Timestamp Firestore.
-        // .toDate() le reconvertit en DateTime Dart, puis
-        // .toIso8601String() le transforme en texte (ex: "2026-09-17T09:00:00"),
-        // car c'est ce format texte que RendezVous.fromJson sait lire
-        // (elle appelle DateTime.parse dessus, comme vu dans le modèle).
+        // Timestamp → DateTime → texte ISO, format lu par fromJson.
         'date': (data['date'] as Timestamp).toDate().toIso8601String(),
-
         'heure': data['heure'],
         'statut': data['statut'],
         'motif': data['motif'],
       });
-      // .toList() transforme le résultat de .map() (une "Iterable" paresseuse)
-      // en une vraie List<RendezVous> exploitable normalement.
     }).toList();
+
+    // Filtre de la journée [debut, fin[ fait en mémoire (le volume de
+    // rendez-vous d'un médecin est faible : coût négligeable).
+    final duJour = liste
+        .where((rdv) => !rdv.date.isBefore(debut) && rdv.date.isBefore(fin))
+        .toList();
+
+    // Tri croissant (les plus tôt en premier) : l'équivalent de
+    // l'ancien orderBy('date') exécuté côté Firestore.
+    duJour.sort((a, b) => a.date.compareTo(b.date));
+    return duJour;
   }
 
   /// Calcule quelques statistiques simples pour le tableau de bord.

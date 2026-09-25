@@ -58,27 +58,34 @@ class SecretaireService {
 
   /// Récupère tous les rendez-vous de l'hôpital (tous médecins confondus)
   /// pour la journée en cours, triés par heure.
+  ///
+  /// Filtre jour + tri effectués EN DART : voir l'explication détaillée
+  /// dans MedecinService.getRendezVousDuJour. Une requête avec plage de
+  /// dates + orderBy exigerait un index composite à créer dans la console
+  /// Firebase, et son absence BLOQUE la connexion à l'espace secrétaire
+  /// avec l'erreur "cloud_firestore/failed-precondition : The query
+  /// requires an index".
   Future<List<RendezVous>> getRendezVousDuJour(String hopitalId) async {
+    // "minuit aujourd'hui" et "minuit demain" : [debut, fin[ = la journée.
     final debutJour = DateTime.now();
     final debut = DateTime(debutJour.year, debutJour.month, debutJour.day);
     final fin = debut.add(const Duration(days: 1));
 
+    // Requête SIMPLE : UN seul filtre d'égalité (hopitalId, et non
+    // medecinId, pour voir TOUS les médecins de l'hôpital) → aucun
+    // index composite requis, donc aucune erreur au démarrage.
     final snapshot = await _db
         .collection('rendez_vous')
-        // Différence clé avec MedecinService : on filtre par hopitalId,
-        // pas par medecinId, pour voir TOUS les médecins de l'hôpital.
         .where('hopitalId', isEqualTo: hopitalId)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(debut))
-        .where('date', isLessThan: Timestamp.fromDate(fin))
-        .orderBy('date')
         .get();
 
-    return snapshot.docs.map((doc) {
+    final liste = snapshot.docs.map((doc) {
       final data = doc.data();
       return RendezVous.fromJson({
         'id': doc.id,
         'patient_nom': data['patientNom'],
         'patient_prenom': data['patientPrenom'],
+        // Timestamp → DateTime → texte ISO, format lu par fromJson.
         'date': (data['date'] as Timestamp).toDate().toIso8601String(),
         'heure': data['heure'],
         'statut': data['statut'],
@@ -88,18 +95,30 @@ class SecretaireService {
         'hopital_id': data['hopitalId'],
       });
     }).toList();
+
+    // Filtre de la journée fait en mémoire : le nombre de rendez-vous
+    // d'un hôpital reste faible, le coût est négligeable.
+    final duJour = liste
+        .where((rdv) => !rdv.date.isBefore(debut) && rdv.date.isBefore(fin))
+        .toList();
+
+    // Tri croissant par heure (l'équivalent de l'ancien orderBy('date')).
+    duJour.sort((a, b) => a.date.compareTo(b.date));
+    return duJour;
   }
 
   /// Récupère tous les patients enregistrés dans cet hôpital.
   Future<List<Patient>> getPatients(String hopitalId) async {
+    // UN seul filtre d'égalité = aucun index composite requis.
+    // L'ancien .orderBy('nom') exigeait un index patients(hopitalId, nom)
+    // créé à la main dans la console → erreur failed-precondition qui
+    // bloquait le chargement de l'espace secrétaire après le login.
     final snapshot = await _db
         .collection('patients')
         .where('hopitalId', isEqualTo: hopitalId)
-        // Tri alphabétique par nom, pratique pour une longue liste.
-        .orderBy('nom')
         .get();
 
-    return snapshot.docs.map((doc) {
+    final liste = snapshot.docs.map((doc) {
       final data = doc.data();
       return Patient.fromJson({
         'id': doc.id,
@@ -115,6 +134,13 @@ class SecretaireService {
         'groupe_sanguin': data['groupeSanguin'],
       });
     }).toList();
+
+    // Tri alphabétique côté Dart, insensible à la casse
+    // ("dupont" et "Dupont" sont classés ensemble).
+    liste.sort(
+      (a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()),
+    );
+    return liste;
   }
 
   /// Calcule quelques statistiques simples pour le tableau de bord secrétaire.
