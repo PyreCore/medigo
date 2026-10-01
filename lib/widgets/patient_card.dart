@@ -29,7 +29,7 @@ class PatientCard extends StatelessWidget {
             // attendant d'avoir de vraies photos de patients.
             CircleAvatar(
               radius: 20,
-              backgroundColor: const Color(0xFF1E88E5).withOpacity(0.12),
+              backgroundColor: const Color(0xFF2E7D32).withOpacity(0.12),
               child: Text(
                 // "[0]" prend le premier caractère du prénom.
                 // ".toUpperCase()" le met en majuscule, ex: "s" -> "S".
@@ -37,7 +37,7 @@ class PatientCard extends StatelessWidget {
                     ? patient.prenom[0].toUpperCase()
                     : '?',
                 style: const TextStyle(
-                  color: Color(0xFF1E88E5),
+                  color: Color(0xFF2E7D32),
                   fontWeight: FontWeight.bold,
                 ),
               ),

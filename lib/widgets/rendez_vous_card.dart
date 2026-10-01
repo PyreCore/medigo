@@ -66,6 +66,14 @@ class RendezVousCard extends StatelessWidget {
   // par défaut (false) : pas besoin, il ne voit que ses propres rendez-vous.
   final bool afficherMedecin;
 
+  // Nouveau paramètre, "true" par défaut : quand le PATIENT regarde SA
+  // propre liste de rendez-vous, afficher son nom en titre n'apporte rien
+  // (il sait qui il est) ; c'est le nom du MÉDECIN qui l'intéresse.
+  // On passe donc afficherPatient: false, ce qui remplace le titre par
+  // medecinNom. Les autres espaces (médecin, secrétaire) gardent le
+  // comportement par défaut.
+  final bool afficherPatient;
+
   // Constructeur. "super.key" transmet le paramètre "key" à la classe
   // parente (StatelessWidget) : c'est une convention Flutter qui aide
   // le framework à identifier ce widget précis quand il redessine l'écran.
@@ -74,6 +82,7 @@ class RendezVousCard extends StatelessWidget {
     required this.rdv,
     this.onTap,
     this.afficherMedecin = false, // valeur par défaut si on ne précise rien
+    this.afficherPatient = true,
   });
 
   // La méthode build() décrit CE QUI DOIT S'AFFICHER À L'ÉCRAN.
@@ -134,7 +143,13 @@ class RendezVousCard extends StatelessWidget {
                   Text(
                     // Getter défini dans le modèle RendezVous :
                     // combine prénom + nom du patient.
-                    rdv.patientNomComplet,
+                    // Côté patient (afficherPatient: false), on affiche
+                    // plutôt le médecin ; et si le rendez-vous n'a pas de
+                    // médecin renseigné, on retombe sur le nom du patient
+                    // pour ne jamais afficher une ligne vide.
+                    afficherPatient
+                        ? rdv.patientNomComplet
+                        : (rdv.medecinNom ?? rdv.patientNomComplet),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 2), // petit espace vertical

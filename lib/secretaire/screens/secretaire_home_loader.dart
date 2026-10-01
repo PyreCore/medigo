@@ -41,10 +41,15 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       // On a besoin de hopitalId (récupéré via le profil) pour toutes
       // les requêtes suivantes, d'où l'ordre : profil d'abord, reste ensuite.
       final hopitalId = secretaire.hopitalId;
-      final patients = await _service.getPatients(hopitalId);
+      final patients = await _service.getPatientsPourHopital(hopitalId);
       final medecins = await _service.getMedecinsHopital(hopitalId);
       final rendezVous = await _service.getRendezVousDuJour(hopitalId);
       final stats = await _service.getStatistiques(hopitalId);
+
+      // 'totalPatients' n'est pas calculé par le service (compter demanderait
+      // une requête Firestore de plus) : on connaît déjà le nombre exact de
+      // patients affichés, la liste étant chargée juste au-dessus.
+      final statistiques = {...stats, 'totalPatients': patients.length};
 
       if (mounted) {
         setState(() {
@@ -52,7 +57,7 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
           _patients = patients;
           _medecins = medecins;
           _rendezVous = rendezVous;
-          _stats = stats;
+          _stats = statistiques;
         });
       }
     } catch (e) {

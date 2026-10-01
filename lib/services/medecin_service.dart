@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 // Le chemin "../models/..." veut dire "remonte d'un dossier, puis va dans models".
 import '../models/medecin.dart';
 import '../models/rendez_vous.dart';
+import 'creneau_service.dart';
 
 /// Un "service" regroupe toute la logique qui va chercher/écrit des
 /// données dans Firestore pour la partie Médecin. Les écrans (screens)
@@ -20,6 +21,7 @@ class MedecinService {
   // "_db" est privé (le underscore _ devant le nom) : utilisable seulement
   // à l'intérieur de cette classe, pas depuis l'extérieur.
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final CreneauService _creneaux = CreneauService();
 
   // "Future<Medecin>" veut dire : cette fonction est ASYNCHRONE, elle
   // ne retourne pas un Medecin immédiatement (interroger Firestore prend
@@ -178,14 +180,18 @@ class MedecinService {
   /// Refuse un rendez-vous (change son statut).
   // "{String? motif}" = paramètre nommé optionnel : on peut appeler
   // refuserRendezVous('abc') seul, ou refuserRendezVous('abc', motif: '...').
+  //
+  // Le refus libère aussi le créneau : une heure refusée redevient
+  // reservable par un autre patient.
   Future<void> refuserRendezVous(String rdvId, {String? motif}) async {
     await _db.collection('rendez_vous').doc(rdvId).update({
       'statut': 'refuse',
       // "if (motif != null) 'motifRefus': motif," est une syntaxe Dart
-      // spéciale : cette entrée n'est ajoutée au Map QUE SI motif n'est
+      // spéciale : cette entrée ne sera ajoutée au Map QUE SI motif n'est
       // pas null. Si aucun motif n'est fourni, le champ motifRefus
       // n'est simplement pas envoyé à Firestore.
       if (motif != null) 'motifRefus': motif,
     });
+    await _creneaux.liberer(rdvId);
   }
 }

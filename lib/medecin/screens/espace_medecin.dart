@@ -117,7 +117,9 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
         rendezVous: widget.rendezVousDuJour,
         onTapRendezVous: _ouvrirDetailRdv,
       ),
-      const DisponibilitesMedecin(),
+      // L'onglet Disponibilités a besoin de l'identité du médecin pour lire
+      // et écrire ses plages dans Firestore.
+      DisponibilitesMedecin(medecin: widget.medecin),
       ProfilMedecin(
         medecin: widget.medecin,
         onDeconnexion: widget.onDeconnexion,
