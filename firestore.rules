@@ -1,0 +1,255 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // USERS
+    match /users/{userId} {
+      // Lecture : son propre profil, ou tous les profils pour les roles de
+      // gestion.
+      //
+      // Troisieme cas, ajoute pour les PATIENTS : ils doivent pouvoir
+      // lister les medecins d'un hopital pour reserver, et les medecins
+      // vivent dans "users". On ne leur ouvre donc QUE les documents de
+      // role "medecin" : ouvrir toute la collection leur donnerait aussi
+      // les coordonnees des secretaires et des autres comptes.
+      //
+      // La condition porte sur "resource.data.role" : elle n'est acceptable
+      // que si la requête filtre elle-meme sur "role". C'est pourquoi
+      // PatientService.getMedecins utilise deux filtres d'egalite
+      // (role + hopitalId). Firestock refuse sinon la requete entiere.
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital', 'secretaire'] ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'patient' &&
+         resource.data.role == 'medecin')
+      );
+
+      // Creation d'un profil.
+      //
+      // Les roles de gestion restent les seuls autorises a creer un compte
+      // tiers. On y ajoute l'auto-inscription : au moment ou le patient
+      // s'inscrit, il n'a pas encore de document "users", donc
+      // get(...users/$(uid)).data.role vaut null et toutes les conditions
+      // tombaient. Sans ce cas, aucun patient n'a jamais pu s'inscrire.
+      //
+      // On borne l'auto-creation a SON PROPRE document et au role "patient" :
+      // sans cela, un compte cree par inscription pourrait s'auto-attribuer
+      // "adminSysteme" et obtenir tous les droits.
+      allow create: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminHopital', 'secretaire'] ||
+        (request.auth.uid == userId && request.resource.data.role == 'patient')
+      );
+
+      // Modification : uniquement dans SON hopital, par un role de gestion.
+      // resource = le document tel qu il est AVANT modification.
+      allow update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+            in ['adminHopital', 'secretaire'] &&
+          resource.data.hopitalId ==
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId
+        )
+      );
+
+      // Suppression : comme la modification, OU son propre profil. Le
+      // patient a besoin de ce second cas : en cas d'echec d'inscription,
+      // PatientService.inscrire annule le document "users" qu'il vient
+      // d'ecrire, faute de quoi il resterait un profil "patient" orphelin.
+      allow delete: if request.auth != null && (
+        request.auth.uid == userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+            in ['adminHopital', 'secretaire'] &&
+          resource.data.hopitalId ==
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId
+        )
+      );
+    }
+
+    // HOPITAUX
+    match /hopitaux/{hopitalId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme';
+      // adminHopital ne peut modifier que SON hopital (hopitalId = son propre uid de doc)
+      allow update, delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminHopital' &&
+         hopitalId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId)
+      );
+    }
+
+    // SPECIALITES
+    match /specialites/{specId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital'];
+      // adminHopital : uniquement dans son hopital
+      allow update, delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminHopital' &&
+         resource.data.hopitalId ==
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId)
+      );
+    }
+
+    // MEDECINS
+    match /medecins/{medecinId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital'];
+      allow update, delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminHopital' &&
+         resource.data.hopitalId ==
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'medecin' &&
+         resource.data.userId == request.auth.uid)
+      );
+    }
+
+    // PATIENTS
+    //
+    // Gestion (secretaires / adminHopital / adminSysteme) comme avant, plus le
+    // patient sur SON propre dossier.
+    //
+    // Le lien avec le compte n'est PAS l'id du document : "patients" est cree
+    // avec .add(), donc l'id est tire au sort par Firestore et ne vaut jamais
+    // l'uid du compte. Le rattachement se fait par le CHAMP "userId", que
+    // PatientService.ecrit explicitement.
+    //
+    // Cette distinction compte pour create : au moment de l'ecriture,
+    // "request.auth.uid == patientId" est toujours faux, car l'id final
+    // n'existe pas encore. On teste donc request.resource.data.userId.
+    match /patients/{patientId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == patientId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin'] ||
+        resource.data.userId == request.auth.uid
+      );
+
+      allow create: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['secretaire', 'adminHopital', 'adminSysteme'] ||
+        request.resource.data.userId == request.auth.uid
+      );
+
+      // Les deux tests sur "userId" (avant ET apres) empechent un patient de
+      // detacher son dossier vers un autre compte en se contentant d'ecrire.
+      allow update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['secretaire', 'adminHopital', 'adminSysteme'] ||
+        (resource.data.userId == request.auth.uid &&
+         request.resource.data.userId == request.auth.uid)
+      );
+
+      allow delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['secretaire', 'adminHopital', 'adminSysteme'] ||
+        resource.data.userId == request.auth.uid
+      );
+    }
+
+    // DISPONIBILITES
+    match /disponibilites/{dispId} {
+      allow read: if true;
+      allow write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital', 'medecin'] ||
+        resource.data.medecinId == request.auth.uid
+      );
+    }
+
+    // RENDEZ-VOUS
+    // Deux collections coexistent : 'rendezvous' (nouvelle) et 'rendez_vous' (module medecin)
+    match /rendezvous/{rdvId} {
+      allow read: if request.auth != null && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.medecinId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin']
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.patientId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin']
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.medecinId == request.auth.uid ||
+        resource.data.patientId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin']
+      );
+    }
+
+    match /rendez_vous/{rdvId} {
+      allow read: if request.auth != null && (
+        resource.data.medecinId == request.auth.uid ||
+        // Un patient ne lit que SES rendez-vous, et uniquement parce que
+        // chaque document porte l'uid du compte dans "patientUid". Ce champ
+        // est indispensable : verifier l'appartenance en remontant au
+        // dossier "patients" via un get() ne fonctionne pas depuis une
+        // requete, Firestore refusant alors la requete entiere. La regle
+        // doit porter sur un champ que la requete constraint.
+        resource.data.patientUid == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin']
+      );
+      allow create: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['secretaire', 'adminHopital', 'adminSysteme', 'medecin'] ||
+        request.resource.data.patientUid == request.auth.uid
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.medecinId == request.auth.uid ||
+        resource.data.patientUid == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['secretaire', 'adminHopital', 'adminSysteme']
+      );
+    }
+
+    // CRENEAUX OCCUPES
+    //
+    // Une entree par creneau reserve : quel medecin, quel jour, quelle
+    // heure, pour quel rendez-vous. AUCUNE donnee personnelle ici, c'est ce
+    // qui permet d'ouvrir la lecture a tout le monde.
+    //
+    // Cette collection remplace la lecture de tous les rendez-vous d'un
+    // medecin pour savoir quelles heures sont prises : ce calcul exposait au
+    // patient le nom et le motif de consultation des autres patients.
+    match /creneaux_occupes/{creneauId} {
+      allow read: if true;
+
+      // On n'occupe un creneau que pour un rendez-vous qui nous appartient :
+      // le document doit pointer vers un rendez-vous porte par l'appelant.
+      allow create: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital', 'secretaire'] ||
+        request.resource.data.medecinId == request.auth.uid ||
+        get(/databases/$(database)/documents/rendez_vous/$(request.resource.data.rdvId)).data.patientUid
+          == request.auth.uid
+      );
+
+      // Un creneau ne se modifie pas : on le supprime et on en cree un autre.
+      allow update: if false;
+
+      // Liberation par le proprietaire du rendez-vous, par le medecin
+      // concerne, ou par un role de gestion (annulation au guichet).
+      allow delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital', 'secretaire'] ||
+        resource.data.medecinId == request.auth.uid ||
+        get(/databases/$(database)/documents/rendez_vous/$(resource.data.rdvId)).data.patientUid
+          == request.auth.uid
+      );
+    }
+
+    // Tout le reste : bloque par defaut
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

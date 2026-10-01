@@ -27,7 +27,11 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               if (mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
+                // Deconnexion : on revient a l'accueil PUBLIC et on vide la
+                // pile. Un simple pushReplacementNamed laisserait l'espace
+                // prive sous l'accueil, et le bouton retour renverrait dans
+                // un ecran qui suppose encore une session ouverte.
+                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
               }
             },
           ),

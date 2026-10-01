@@ -75,93 +75,129 @@ class ChipStatutRdv extends StatelessWidget {
   }
 }
 
-/// Carte cliquable représentant un rendez-vous.
-/// Utilisée sur les deux dashboards et sur les écrans « liste des RDV ».
+/// Carte de rendez-vous complète (médecin + secrétaire).
 class RendezVousCard extends StatelessWidget {
-  /// Le rendez-vous à afficher.
   final RendezVous rdv;
-
-  /// Fonction appelée au clic (null = carte non cliquable).
   final VoidCallback? onTap;
-
-  /// true côté secrétaire : elle voit plusieurs médecins mélangés, elle
-  /// a donc besoin du nom du médecin concerné sous le nom du patient.
   final bool afficherMedecin;
+  final bool afficherPatient;
 
+  // Constructeur. "super.key" transmet le paramètre "key" à la classe
+  // parente (StatelessWidget) : c'est une convention Flutter qui aide
+  // le framework à identifier ce widget précis quand il redessine l'écran.
   const RendezVousCard({
     super.key,
     required this.rdv,
     this.onTap,
-    this.afficherMedecin = false,
+    this.afficherMedecin = false, // valeur par défaut si on ne précise rien
+    this.afficherPatient = true,
   });
 
+  // La méthode build() décrit CE QUI DOIT S'AFFICHER À L'ÉCRAN.
+  // Flutter l'appelle automatiquement à chaque fois qu'il a besoin de
+  // (re)dessiner ce widget. "BuildContext context" donne accès à des
+  // infos sur la position de ce widget dans l'arbre de l'application
+  // (thème, taille de l'écran, navigation...).
   @override
   Widget build(BuildContext context) {
-    // Sous-titre : nom du médecin (si demandé), sinon le motif de la
-    // consultation, sinon un texte par défaut.
-    final sousTitre = afficherMedecin && rdv.medecinNom != null
-        ? rdv.medecinNom!
-        : (rdv.motif != null && rdv.motif!.isNotEmpty
-              ? rdv.motif!
-              : 'Consultation');
+    // On calcule une fois la couleur correspondant au statut, pour ne
+    // pas répéter couleurStatutRdv(rdv.statut) plusieurs fois plus bas.
+    final couleur = couleurStatutRdv(rdv.statut);
 
-    // CarteMedigo apporte le blanc, les coins arrondis, l'ombre douce
-    // et l'effet de survol — on ne gère ici que le CONTENU.
-    return CarteMedigo(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      child: Row(
-        children: [
-          // Pastille horaire : l'information la plus lue d'un coup
-          // d'œil, mise en avant à gauche ( fond bleu très clair).
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.bleuMedical.withValues(alpha: 0.09),
-              borderRadius: BorderRadius.circular(Rayons.petite),
-            ),
-            child: Text(
-              rdv.heure,
-              style: const TextStyle(
-                color: AppColors.bleuMedical,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
+    // InkWell rend n'importe quel widget cliquable, avec un petit effet
+    // visuel "d'encre qui s'étale" au clic (typique Material Design).
+    return InkWell(
+      onTap: onTap, // fonction appelée au clic (peut être null = pas cliquable)
+      // Arrondit aussi l'effet visuel du clic pour qu'il suive la forme
+      // de la carte (sinon l'effet déborderait en rectangle).
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        // Espace vide EN DEHORS du cadre (entre cette carte et les autres).
+        margin: const EdgeInsets.only(bottom: 10),
+        // Espace vide À L'INTÉRIEUR du cadre (entre le bord et le contenu).
+        padding: const EdgeInsets.all(14),
+        // "decoration" permet de styliser le fond, les bords, les coins...
+        decoration: BoxDecoration(
+          color: Colors.white, // fond blanc
+          borderRadius: BorderRadius.circular(14), // coins arrondis
+          // Bordure fine, presque invisible (6% d'opacité de noir).
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        // "Row" aligne ses enfants HORIZONTALEMENT, les uns à côté des autres.
+        child: Row(
+          children: [
+            // Petit trait de couleur vertical à gauche de la carte,
+            // qui indique visuellement le statut d'un coup d'œil.
+            Container(
+              width: 4,
+              height: 40,
+              decoration: BoxDecoration(
+                color: couleur,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // Expanded : le bloc de texte prend l'espace restant.
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  rdv.patientNomComplet,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.texte,
+            // Espace vide fixe de 12 pixels entre le trait et le texte.
+            const SizedBox(width: 12),
+            // "Expanded" dit à ce widget de prendre TOUT l'espace
+            // horizontal restant dans la Row (sinon le texte pourrait
+            // être coupé ou la Row planterait si le contenu est trop large).
+            Expanded(
+              // "Column" aligne ses enfants VERTICALEMENT, les uns
+              // au-dessus des autres.
+              child: Column(
+                // Aligne le texte à gauche (au lieu du centre par défaut).
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    // Getter défini dans le modèle RendezVous :
+                    // combine prénom + nom du patient.
+                    // Côté patient (afficherPatient: false), on affiche
+                    // plutôt le médecin ; et si le rendez-vous n'a pas de
+                    // médecin renseigné, on retombe sur le nom du patient
+                    // pour ne jamais afficher une ligne vide.
+                    afficherPatient
+                        ? rdv.patientNomComplet
+                        : (rdv.medecinNom ?? rdv.patientNomComplet),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  sousTitre,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.texteFaible,
+                  const SizedBox(height: 2), // petit espace vertical
+                  Text(
+                    // "if (condition) ... else ..." dans un template de texte
+                    // n'existe pas directement : on utilise l'opérateur "?:"
+                    // pour choisir le texte à afficher selon afficherMedecin.
+                    afficherMedecin && rdv.medecinNom != null
+                        ? '${rdv.heure} · ${rdv.medecinNom}'
+                        : rdv.heure,
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          ChipStatutRdv(statut: rdv.statut),
-        ],
+            // Petit badge coloré affichant le statut en toutes lettres
+            // (ex: "Confirmé"), à droite de la carte.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                // Même couleur que le trait, mais très transparente (12%),
+                // pour un fond pastel assorti au statut.
+                color: couleur.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                libelleStatutRdv(rdv.statut),
+                style: TextStyle(
+                  color: couleur, // texte dans la couleur pleine du statut
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Petite flèche ">" tout à droite, qui suggère visuellement
+            // "tape ici pour voir plus de détails".
+            const Icon(Icons.chevron_right, color: Colors.black26, size: 20),
+          ],
+        ),
       ),
     );
   }

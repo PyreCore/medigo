@@ -13,6 +13,11 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Obligatoire pour flutter_local_notifications : le plugin utilise des
+        // API java.time (instants et fuseaux horaires), qui n'existent sur
+        // Android qu'à partir de l'API 26. Le desugaring les rend
+        // disponibles sur les versions antérieures.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -41,6 +46,12 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Fournit les implémentations des API java.time manquantes sur les
+    // anciennes versions d'Android (cf. isCoreLibraryDesugaringEnabled).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

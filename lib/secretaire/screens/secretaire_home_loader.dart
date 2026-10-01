@@ -43,10 +43,15 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       // On a besoin de hopitalId (récupéré via le profil) pour toutes
       // les requêtes suivantes, d'où l'ordre : profil d'abord, reste ensuite.
       final hopitalId = secretaire.hopitalId;
-      final patients = await _service.getPatients(hopitalId);
+      final patients = await _service.getPatientsPourHopital(hopitalId);
       final medecins = await _service.getMedecinsHopital(hopitalId);
       final rendezVous = await _service.getRendezVousDuJour(hopitalId);
       final stats = await _service.getStatistiques(hopitalId);
+
+      // 'totalPatients' n'est pas calculé par le service (compter demanderait
+      // une requête Firestore de plus) : on connaît déjà le nombre exact de
+      // patients affichés, la liste étant chargée juste au-dessus.
+      final statistiques = {...stats, 'totalPatients': patients.length};
 
       if (mounted) {
         setState(() {
@@ -54,7 +59,7 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
           _patients = patients;
           _medecins = medecins;
           _rendezVous = rendezVous;
-          _stats = stats;
+          _stats = statistiques;
         });
       }
     } catch (e) {
@@ -117,7 +122,11 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
   Future<void> _deconnexion() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      // Deconnexion : on revient a l'accueil PUBLIC et on vide la pile.
+      // Un simple pushReplacementNamed laisserait l'espace prive sous
+      // l'accueil, et le bouton retour renverrait dans un ecran qui
+      // suppose encore une session ouverte.
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
     }
   }
 

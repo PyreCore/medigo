@@ -73,6 +73,42 @@ class RendezVous {
   // Le "$" dans une chaîne de caractères insère la valeur de la variable.
   String get patientNomComplet => '$patientPrenom $patientNom';
 
+  /// L'instant RÉEL du rendez-vous, date ET heure réunies.
+  ///
+  /// Firestore stocke le jour dans "date" (un Timestamp pris à minuit, issu du
+  /// sélecteur de date) et l'heure à part dans "heure" ("09:30"). Un
+  /// rendez-vous de 14h est donc enregistré avec date = 14/09 00:00 et
+  /// heure = "14:00".
+  ///
+  /// Consulter `rdv.date` seul donne donc minuit, ce qui est faux de 24 h
+  /// pour tout ce qui doit raisonner sur l'heure du rendez-vous : Programmer
+  /// un rappel, trier par ordre chronologique, décider si c'est déjà passé.
+  /// Ce getter est le seul endroit où cette recomposition doit être écrite.
+  DateTime get dateHeure {
+    final morceaux = heure.split(':');
+    final h = morceaux.isNotEmpty ? (int.tryParse(morceaux[0]) ?? 0) : 0;
+    final m = morceaux.length > 1 ? (int.tryParse(morceaux[1]) ?? 0) : 0;
+    return DateTime(date.year, date.month, date.day, h, m);
+  }
+
+  /// Le patient peut-il encore annuler ou reprogrammer ce rendez-vous ?
+  ///
+  /// RÈGLE MÉTIER : la main reste au patient tant que la secrétaire (ou le
+  /// médecin) n'a pas confirmé. Passé "confirme", l'horaire est réservé par
+  /// l'hôpital : le patient ne peut plus l'annuler ni le déplacer seul, il
+  /// doit passer par la secrétaire. La même règle vaut pour l'annulation et
+  /// la reprogrammation — on ne peut pas laisser un patient annuler un RDV
+  /// confirmé pendant qu'il pourrait encore le décaler.
+  ///
+  /// Un rendez-vous passé n'est plus modifiable dans tous les cas : c'est un
+  /// document d'archive.
+  ///
+  /// Cette règle est écrite ICI, et pas dupliquée dans les écrans et les
+  /// services, parce que c'est le seul endroit où les trois doivent
+  /// nécessairement être d'accord.
+  bool get modifiableParPatient =>
+      statut == StatutRendezVous.enAttente && dateHeure.isAfter(DateTime.now());
+
   // Constructeur nommé qui transforme les données brutes Firestore
   // (un Map, comme un objet JSON) en vrai objet RendezVous Dart.
   factory RendezVous.fromJson(Map<String, dynamic> json) {

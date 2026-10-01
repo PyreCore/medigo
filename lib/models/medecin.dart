@@ -14,6 +14,14 @@ class Medecin {
   // il peut valoir null (le médecin n'a pas forcément de photo).
   final String? photoUrl; // lien vers la photo de profil (optionnel)
 
+  // Ajout (espace Patient) : les documents "users" des médecins stockent
+  // "specialiteId" (l'id du document dans la collection "specialites"),
+  // et non le nom de la spécialité. On expose donc cet id pour pouvoir
+  // filtrer la liste des médecins selon la spécialité choisie par le
+  // patient. Nullable : les documents "medecins" (collection historique)
+  // ne portent pas ce champ.
+  final String? specialiteId;
+
   final String hopitalId; // id de l'hôpital où travaille le médecin
   final String hopitalNom; // nom de l'hôpital, ex: "CHU de Libreville"
 
@@ -28,8 +36,10 @@ class Medecin {
     required this.specialite,
     required this.hopitalId,
     required this.hopitalNom,
-    // Pas de "required" ici car photoUrl est nullable (donc optionnel).
+    // Pas de "required" ici car photoUrl et specialiteId sont nullable
+    // (donc optionnels).
     this.photoUrl,
+    this.specialiteId,
   });
 
   // Ceci est un GETTER : une propriété calculée à la volée, pas stockée.
@@ -67,6 +77,23 @@ class Medecin {
       // Pas de "?? ''" ici : si photoUrl est absent, photoUrl reste null,
       // ce qui est normal puisque le champ est déjà nullable (String?).
       photoUrl: json['photoUrl'],
+      specialiteId: json['specialiteId']?.toString(),
     );
   }
+
+  /// Deux Medecin sont le même s'ils portent le même id de document.
+  ///
+  /// Dart compare par défaut les objets par IDENTITÉ. Or un médecin est relu
+  /// depuis Firestore à chaque chargement, et le sélecteur du formulaire de
+  /// rendez-vous conserve l'exemplaire précédent : sans cet opérateur, le
+  /// DropdownButton ne trouve plus aucun item portant sa valeur et lève
+  /// l'assertion "There should be exactly one item with [DropdownButton]'s
+  /// value", ce qui affiche l'écran rouge en plein parcours de réservation.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Medecin && runtimeType == other.runtimeType && id == other.id);
+
+  @override
+  int get hashCode => id.hashCode;
 }

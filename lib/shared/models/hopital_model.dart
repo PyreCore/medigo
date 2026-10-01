@@ -31,4 +31,19 @@ class Hopital {
       'email': email,
     };
   }
+
+  /// Deux Hopital sont le même s'ils portent le même id de document.
+  ///
+  /// Sans cet opérateur, Dart compare les objets par IDENTITÉ, et chaque
+  /// relecture de Firestore crée de nouveaux Hopital. Un DropdownButton
+  /// garde alors en mémoire l'ancien exemplaire et ne retrouve plus aucun item
+  /// correspondant : il lève l'assertion "There should be exactly one item
+  /// with [DropdownButton]'s value" et l'écran devient rouge.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Hopital && runtimeType == other.runtimeType && id == other.id);
+
+  @override
+  int get hashCode => id.hashCode;
 }
