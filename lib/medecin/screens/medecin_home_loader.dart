@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/medecin.dart';
 import '../../models/rendez_vous.dart';
 import '../../services/medecin_service.dart';
+import '../../theme/medigo_theme.dart';
+import '../../widgets/ui_kit.dart';
 import 'espace_medecin.dart';
 
 /// Écran "intermédiaire" affiché juste après la connexion d'un médecin :
@@ -64,11 +66,14 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
     // le nouveau statut (et les stats à jour) sans logique compliquée
     // de mise à jour manuelle d'une seule ligne dans la liste.
     await _charger();
+    // Retour visuel : petit message vert en bas de l'écran.
+    if (mounted) messageFlash(context, 'Rendez-vous confirmé');
   }
 
   Future<void> _refuser(RendezVous rdv) async {
     await _service.refuserRendezVous(rdv.id);
     await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous refusé');
   }
 
   Future<void> _deconnexion() async {
@@ -81,18 +86,40 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
   @override
   Widget build(BuildContext context) {
     // Cas 1 : une erreur est survenue (ex: pas de connexion internet,
-    // profil introuvable...).
+    // profil introuvable...). État aux couleurs du design system.
     if (_erreur != null) {
       return Scaffold(
+        backgroundColor: AppColors.fond,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Erreur : $_erreur', textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(onPressed: _charger, child: const Text('Réessayer')),
+                const Text(
+                  'Impossible de charger votre espace',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.texte,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Erreur : $_erreur',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.texteFaible,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                BoutonPrincipal(
+                  texte: 'Réessayer',
+                  pleineLargeur: false,
+                  onPressed: _charger,
+                ),
               ],
             ),
           ),
@@ -100,10 +127,16 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       );
     }
 
-    // Cas 2 : les données ne sont pas encore arrivées, on affiche un
-    // indicateur de chargement au centre de l'écran.
+    // Cas 2 : les données ne sont pas encore arrivées → squelette
+    // pulsant « moulé » sur le tableau de bord (bien plus pro qu'un
+    // simple spinner au centre de l'écran).
     if (_medecin == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: AppColors.fond,
+        body: SqueletteChargement(
+          message: 'Chargement de votre espace…',
+        ),
+      );
     }
 
     // Cas 3 : tout est prêt, on affiche l'écran principal avec les

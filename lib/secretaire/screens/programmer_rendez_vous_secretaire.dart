@@ -119,7 +119,9 @@ class _ProgrammerRendezVousSecretaireState
           // DropdownButtonFormField : liste déroulante avec le style
           // d'un champ de formulaire classique.
           DropdownButtonFormField<Patient>(
-            value: _patientChoisi,
+            // initialValue remplace l'ancien value (déprécié) : c'est la
+            // valeur affichée QUAND LE CHAMP EST CRÉÉ.
+            initialValue: _patientChoisi,
             decoration: const InputDecoration(
               labelText: 'Patient',
               border: OutlineInputBorder(),
@@ -136,7 +138,8 @@ class _ProgrammerRendezVousSecretaireState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<Medecin>(
-            value: _medecinChoisi,
+            // Même principe que le champ Patient ci-dessus.
+            initialValue: _medecinChoisi,
             decoration: const InputDecoration(
               labelText: 'Médecin',
               border: OutlineInputBorder(),
@@ -156,10 +159,9 @@ class _ProgrammerRendezVousSecretaireState
           const SizedBox(height: 12),
 
           // ListTile pratique pour un champ "cliquable" qui ouvre une
-          // boîte de dialogue (ici, le sélecteur de date).
+          // boîte de dialogue (ici, le sélecteur de date) — texte seul.
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.calendar_today),
             title: Text(
               _dateChoisie == null
                   ? 'Choisir une date'
@@ -169,7 +171,6 @@ class _ProgrammerRendezVousSecretaireState
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.access_time),
             title: Text(
               _heureChoisie == null
                   ? 'Choisir une heure'

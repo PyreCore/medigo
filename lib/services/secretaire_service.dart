@@ -190,7 +190,9 @@ class SecretaireService {
       // On ne convertit en Timestamp que si une date a été fournie.
       if (dateNaissance != null)
         'dateNaissance': Timestamp.fromDate(dateNaissance),
-      if (groupeSanguin != null) 'groupeSanguin': groupeSanguin,
+      // Null-aware element ('cle': ?valeur) : le champ n'est envoyé à
+      // Firestore que s'il n'est pas null.
+      'groupeSanguin': ?groupeSanguin,
     });
   }
 
@@ -218,7 +220,8 @@ class SecretaireService {
       // Un rendez-vous programmé par la secrétaire démarre "en_attente",
       // comme quand un patient le prend lui-même : c'est ensuite confirmé.
       'statut': 'en_attente',
-      if (motif != null) 'motif': motif,
+      // Null-aware element : envoyé seulement si un motif a été saisi.
+      'motif': ?motif,
     });
   }
 
@@ -233,7 +236,8 @@ class SecretaireService {
   Future<void> annulerRendezVous(String rdvId, {String? motif}) async {
     await _db.collection('rendez_vous').doc(rdvId).update({
       'statut': 'annule',
-      if (motif != null) 'motifAnnulation': motif,
+      // Null-aware element : envoyé seulement si un motif a été saisi.
+      'motifAnnulation': ?motif,
     });
   }
 }

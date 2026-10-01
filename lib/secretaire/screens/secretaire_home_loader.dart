@@ -5,6 +5,8 @@ import '../../models/patient.dart';
 import '../../models/medecin.dart';
 import '../../models/rendez_vous.dart';
 import '../../services/secretaire_service.dart';
+import '../../theme/medigo_theme.dart';
+import '../../widgets/ui_kit.dart';
 import 'espace_secretaire.dart';
 
 /// Équivalent de MedecinHomeLoader, côté secrétaire : charge le profil,
@@ -74,6 +76,8 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       groupeSanguin: groupeSanguin,
     );
     await _charger();
+    // Retour visuel : message de confirmation en bas de l'écran.
+    if (mounted) messageFlash(context, 'Patient enregistré');
   }
 
   Future<void> _programmerRendezVous({
@@ -95,16 +99,19 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       motif: motif,
     );
     await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous programmé');
   }
 
   Future<void> _confirmer(RendezVous rdv) async {
     await _service.confirmerRendezVous(rdv.id);
     await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous confirmé');
   }
 
   Future<void> _annuler(RendezVous rdv) async {
     await _service.annulerRendezVous(rdv.id);
     await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous annulé');
   }
 
   Future<void> _deconnexion() async {
@@ -118,15 +125,37 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
   Widget build(BuildContext context) {
     if (_erreur != null) {
       return Scaffold(
+        backgroundColor: AppColors.fond,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Erreur : $_erreur', textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(onPressed: _charger, child: const Text('Réessayer')),
+                const Text(
+                  'Impossible de charger votre espace',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.texte,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Erreur : $_erreur',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.texteFaible,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                BoutonPrincipal(
+                  texte: 'Réessayer',
+                  pleineLargeur: false,
+                  onPressed: _charger,
+                ),
               ],
             ),
           ),
@@ -135,7 +164,13 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
     }
 
     if (_secretaire == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      // Squelette pulsant « moulé » sur le tableau de bord.
+      return const Scaffold(
+        backgroundColor: AppColors.fond,
+        body: SqueletteChargement(
+          message: 'Chargement de votre espace…',
+        ),
+      );
     }
 
     return EspaceSecretaire(
@@ -148,6 +183,7 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       onProgrammerRendezVous: _programmerRendezVous,
       onConfirmerRendezVous: _confirmer,
       onAnnulerRendezVous: _annuler,
+      onRafraichir: _charger,
       onDeconnexion: _deconnexion,
     );
   }

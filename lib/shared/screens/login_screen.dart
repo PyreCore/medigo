@@ -116,7 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoading = false;
         });
       }
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException {
+      // Pas besoin du détail de l'exception ici : tout problème de
+      // connexion Firebase Auth sur ce formulaire vient presque toujours
+      // d'un email ou d'un mot de passe invalide.
       setState(() {
         _erreur = 'Email ou mot de passe incorrect';
         _isLoading = false;

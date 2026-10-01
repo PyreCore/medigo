@@ -181,11 +181,12 @@ class MedecinService {
   Future<void> refuserRendezVous(String rdvId, {String? motif}) async {
     await _db.collection('rendez_vous').doc(rdvId).update({
       'statut': 'refuse',
-      // "if (motif != null) 'motifRefus': motif," est une syntaxe Dart
-      // spéciale : cette entrée n'est ajoutée au Map QUE SI motif n'est
-      // pas null. Si aucun motif n'est fourni, le champ motifRefus
-      // n'est simplement pas envoyé à Firestore.
-      if (motif != null) 'motifRefus': motif,
+      // Syntaxe « null-aware element » ('cle': ?valeur) : cette entrée
+      // n'est ajoutée au Map QUE SI motif n'est pas null. Si aucun motif
+      // n'est fourni, le champ motifRefus n'est simplement pas envoyé
+      // à Firestore (équivalent plus moderne de
+      // "if (motif != null) 'motifRefus': motif,").
+      'motifRefus': ?motif,
     });
   }
 }

@@ -51,7 +51,9 @@ class DetailRendezVousMedecin extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.06),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +75,7 @@ class DetailRendezVousMedecin extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: couleur.withOpacity(0.12),
+                        color: couleur.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -88,8 +90,8 @@ class DetailRendezVousMedecin extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Ligne "icône horloge + heure" (widget privé défini plus bas).
-                _LigneInfo(icone: Icons.access_time, texte: rdv.heure),
+                // Ligne "libellé …… valeur" (widget privé, sans icône).
+                _LigneInfo(libelle: 'Heure', valeur: rdv.heure),
                 // "..." (spread) avec "if" : ce bloc n'ajoute des widgets à
                 // "children" QUE SI la condition est vraie (motif existe
                 // et n'est pas vide). Sinon, rien n'est ajouté du tout —
@@ -97,7 +99,7 @@ class DetailRendezVousMedecin extends StatelessWidget {
                 // deux widgets, ici on peut carrément n'en ajouter aucun.
                 if (rdv.motif != null && rdv.motif!.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  _LigneInfo(icone: Icons.notes, texte: rdv.motif!),
+                  _LigneInfo(libelle: 'Motif', valeur: rdv.motif!),
                 ],
               ],
             ),
@@ -113,14 +115,12 @@ class DetailRendezVousMedecin extends StatelessWidget {
                 Expanded(
                   // OutlinedButton = bouton avec juste un contour, pas de
                   // fond plein (style "action secondaire", ici Refuser).
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFC62828), // texte/icône rouges
+                      foregroundColor: const Color(0xFFC62828), // texte rouge
                       side: const BorderSide(color: Color(0xFFC62828)), // contour rouge
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.close),
-                    label: const Text('Refuser'),
                     // Opérateur ternaire : si onRefuser est null (le
                     // parent n'a pas fourni de fonction), le bouton est
                     // DÉSACTIVÉ (grisé, non cliquable) car onPressed: null.
@@ -137,26 +137,26 @@ class DetailRendezVousMedecin extends StatelessWidget {
                             // a déjà quitté l'écran pendant que "await" attendait.
                             if (context.mounted) Navigator.pop(context);
                           },
+                    child: const Text('Refuser'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   // ElevatedButton = bouton avec un fond plein (style
                   // "action principale", ici Accepter, mis en avant).
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2E6F6E),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.check),
-                    label: const Text('Accepter'),
                     onPressed: onAccepter == null
                         ? null
                         : () async {
                             await onAccepter!();
                             if (context.mounted) Navigator.pop(context);
                           },
+                    child: const Text('Accepter'),
                   ),
                 ),
               ],
@@ -168,23 +168,39 @@ class DetailRendezVousMedecin extends StatelessWidget {
   }
 }
 
-// Petit widget privé réutilisé pour afficher "icône + texte" sur une
-// ligne (utilisé pour l'heure et le motif dans la carte au-dessus).
+// Petit widget privé : ligne "libellé …… valeur" — sans icône
+// (utilisé pour l'heure et le motif dans la carte au-dessus).
 class _LigneInfo extends StatelessWidget {
-  final IconData icone;
-  final String texte;
-  const _LigneInfo({required this.icone, required this.texte});
+  final String libelle;
+  final String valeur;
+  const _LigneInfo({required this.libelle, required this.valeur});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icone, size: 18, color: Colors.black45),
-        const SizedBox(width: 8),
-        // Expanded : si le texte (ex: un long motif) est trop long, il
-        // passera à la ligne au lieu de faire déborder l'écran horizontalement.
-        Expanded(child: Text(texte)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            libelle,
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(width: 12),
+          // Flexible : si la valeur (ex: un long motif) est trop longue,
+          // elle passe à la ligne au lieu de faire déborder l'écran.
+          Expanded(
+            child: Text(
+              valeur,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

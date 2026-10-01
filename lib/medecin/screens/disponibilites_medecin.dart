@@ -36,7 +36,7 @@ class DisponibilitesMedecin extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.black.withOpacity(0.06)),
+            side: BorderSide(color: Colors.black.withValues(alpha: 0.06)),
           ),
           // SwitchListTile = ligne prête à l'emploi avec un titre, un
           // sous-titre, ET un interrupteur (switch) à droite. Parfait
@@ -50,7 +50,9 @@ class DisponibilitesMedecin extends StatelessWidget {
             // jours de semaine activés par défaut) : à remplacer par les
             // vraies disponibilités venant de Firestore.
             value: index < 5, // Lun-Ven actifs par défaut, démo uniquement
-            activeColor: const Color(0xFF2E6F6E), // couleur du switch quand activé
+            // activeThumbColor remplace l'ancien activeColor (déprécié) :
+            // couleur du curseur quand l'interrupteur est activé.
+            activeThumbColor: const Color(0xFF2E6F6E),
             // Pour l'instant, on ne modifie rien réellement : on affiche
             // juste un message temporaire (SnackBar = petit bandeau qui
             // apparaît en bas de l'écran puis disparaît tout seul).

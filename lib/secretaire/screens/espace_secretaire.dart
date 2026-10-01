@@ -3,6 +3,8 @@ import '../../models/secretaire.dart';
 import '../../models/patient.dart';
 import '../../models/medecin.dart';
 import '../../models/rendez_vous.dart';
+import '../../widgets/structure_espace.dart';
+import '../../widgets/ui_kit.dart';
 import 'accueil_secretaire.dart';
 import 'liste_patients_secretaire.dart';
 import 'enregistrement_patient_secretaire.dart';
@@ -11,9 +13,13 @@ import 'detail_rendez_vous_secretaire.dart';
 import 'programmer_rendez_vous_secretaire.dart';
 import 'profil_secretaire.dart';
 
-/// Écran principal de l'espace Secrétaire : gère la barre de navigation
-/// en bas et bascule entre les 4 onglets (Accueil, Patients, Rendez-vous,
-/// Profil). Même structure que EspaceMedecin, pour rester cohérent.
+/// Écran principal de l'espace Secrétaire.
+/// La COQUILLE (navigation rail sur web, barre basse sur mobile,
+/// en-tête de page) est fournie par StructureEspace ; ici on gère :
+///  · l'onglet actif,
+///  · la photo à jour (modifiable depuis l'onglet Profil),
+///  · l'ouverture des écrans de détail / formulaires,
+///  · le relais des callbacks reçus du chargeur d'écran.
 class EspaceSecretaire extends StatefulWidget {
   final Secretaire secretaire;
   final List<Patient> patients;
@@ -41,6 +47,7 @@ class EspaceSecretaire extends StatefulWidget {
 
   final Future<void> Function(RendezVous rdv)? onConfirmerRendezVous;
   final Future<void> Function(RendezVous rdv)? onAnnulerRendezVous;
+  final Future<void> Function()? onRafraichir;
   final VoidCallback? onDeconnexion;
 
   const EspaceSecretaire({
@@ -54,6 +61,7 @@ class EspaceSecretaire extends StatefulWidget {
     this.onProgrammerRendezVous,
     this.onConfirmerRendezVous,
     this.onAnnulerRendezVous,
+    this.onRafraichir,
     this.onDeconnexion,
   });
 
@@ -65,13 +73,16 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
   // 0 = Accueil, 1 = Patients, 2 = Rendez-vous, 3 = Profil.
   int _ongletActif = 0;
 
-  static const _titres = ['Espace Secrétaire', 'Patients', 'Rendez-vous', 'Profil'];
+  // Photo de profil à jour (voir EspaceMedecin : même mécanisme).
+  String? _photoModifiee;
+
+  String? get _photo => _photoModifiee ?? widget.secretaire.photoUrl;
 
   // Ouvre le détail d'un rendez-vous par-dessus l'écran actuel.
   void _ouvrirDetailRdv(RendezVous rdv) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      routeMedigo(
         builder: (_) => DetailRendezVousSecretaire(
           rdv: rdv,
           onConfirmer: () async {
@@ -98,7 +109,7 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
   void _ouvrirEnregistrementPatient() {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      routeMedigo(
         builder: (_) => EnregistrementPatientSecretaire(
           onValider: ({
             required nom,
@@ -125,7 +136,7 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
   void _ouvrirProgrammationRdv() {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      routeMedigo(
         builder: (_) => ProgrammerRendezVousSecretaire(
           patients: widget.patients,
           medecins: widget.medecins,
@@ -155,9 +166,14 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
     final onglets = [
       AccueilSecretaire(
         secretaire: widget.secretaire,
+        photoUrl: _photo,
         rendezVousDuJour: widget.rendezVousDuJour,
         statistiques: widget.statistiques,
         onTapRendezVous: _ouvrirDetailRdv,
+        // Actions rapides du dashboard (visibles sur mobile ET web).
+        onNouveauRendezVous: _ouvrirProgrammationRdv,
+        onNouveauPatient: _ouvrirEnregistrementPatient,
+        onRafraichir: widget.onRafraichir,
       ),
       ListePatientsSecretaire(
         patients: widget.patients,
@@ -170,41 +186,24 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
       ),
       ProfilSecretaire(
         secretaire: widget.secretaire,
+        photoUrl: _photo,
+        onPhotoChange: (url) => setState(() => _photoModifiee = url),
         onDeconnexion: widget.onDeconnexion,
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
-      appBar: AppBar(title: Text(_titres[_ongletActif])),
-      body: IndexedStack(index: _ongletActif, children: onglets),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _ongletActif,
-        onDestinationSelected: (index) =>
-            setState(() => _ongletActif = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Accueil',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Patients',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today),
-            label: 'Rendez-vous',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
+    return StructureEspace(
+      titreEspace: 'Espace Secrétaire',
+      nomUtilisateur: widget.secretaire.nomComplet,
+      initialesUser: initiales(
+        widget.secretaire.prenom,
+        widget.secretaire.nom,
       ),
+      photoUser: _photo,
+      indexActif: _ongletActif,
+      onChoisirOnglet: (index) => setState(() => _ongletActif = index),
+      libelles: const ['Accueil', 'Patients', 'Rendez-vous', 'Profil'],
+      onglets: onglets,
     );
   }
 }

@@ -52,9 +52,12 @@ class ListePatientsSecretaire extends StatelessWidget {
         Positioned(
           bottom: 16,
           right: 16,
-          child: FloatingActionButton(
+          // Bouton étendu : libellé texte seul (pas d'icône "+").
+          child: FloatingActionButton.extended(
             onPressed: onNouveauPatient,
-            child: const Icon(Icons.add),
+            backgroundColor: const Color(0xFF0B57D0), // bleuMedical
+            foregroundColor: Colors.white,
+            label: const Text('Nouveau patient'),
           ),
         ),
       ],

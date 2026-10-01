@@ -1,37 +1,36 @@
-// Package standard de Flutter qui fournit tous les widgets visuels
-// prêts à l'emploi (boutons, textes, listes, couleurs Material Design...).
+// ─────────────────────────────────────────────────────────────────────
+// CARTE DE RENDEZ-VOUS — composant partagé (médecin + secrétaire).
+// Refaite sur le design system Medigo (lib/theme/medigo_theme.dart) :
+// carte blanche arrondie + ombre douce, pastille horaire à gauche,
+// badge de statut coloré à droite, effet de survol sur web.
+// ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../models/rendez_vous.dart';
+import '../theme/medigo_theme.dart';
+import 'ui_kit.dart';
 
-// Fonction "libre" (pas dans une classe) qui associe une couleur à
-// chaque statut de rendez-vous. On la met ici, à côté du widget qui
-// s'en sert le plus, mais comme elle est publique (pas de underscore _),
-// d'autres fichiers peuvent aussi l'utiliser en l'important.
+/// Associe une couleur de la palette Medigo à chaque statut.
+/// (Fonction publique : d'autres écrans peuvent l'importer.)
 Color couleurStatutRdv(StatutRendezVous statut) {
   // "switch" sur une valeur d'enum : chaque "case" correspond à une
   // valeur possible de StatutRendezVous.
   switch (statut) {
     case StatutRendezVous.confirme:
-      // "const" = cette couleur est calculée une seule fois à la compilation,
-      // pas recréée à chaque fois que la fonction est appelée (plus rapide).
-      // 0xFF2E7D32 est un code couleur hexadécimal : FF = opacité pleine,
-      // 2E7D32 = un vert.
-      return const Color(0xFF2E7D32);
+      return AppColors.vertSante; // vert santé : c'est validé
     case StatutRendezVous.enAttente:
-      return const Color(0xFFD98E04); // orange
-    // Deux "case" collés sans "return" entre eux = même résultat pour les
-    // deux : refusé ET annulé affichent la même couleur (rouge).
+      return AppColors.ambre; // ambre : ça attend une décision
+    // Deux "case" collés sans "return" entre eux = même résultat :
+    // refusé ET annulé partagent le même rouge.
     case StatutRendezVous.refuse:
     case StatutRendezVous.annule:
-      return const Color(0xFFC62828); // rouge
+      return AppColors.rouge;
     case StatutRendezVous.termine:
-      return Colors.black45; // gris (couleur prédéfinie de Flutter)
+      return AppColors.texteFaible; // gris-bleu discret : terminé
   }
 }
 
-// Même principe, mais pour le texte affiché à l'utilisateur (en français,
-// alors que l'enum est en anglais/camelCase pour respecter les
-// conventions de code Dart).
+/// Libellé français de chaque statut (l'enum, elle, reste en anglais
+/// pour respecter les conventions de nommage Dart).
 String libelleStatutRdv(StatutRendezVous statut) {
   switch (statut) {
     case StatutRendezVous.confirme:
@@ -47,134 +46,183 @@ String libelleStatutRdv(StatutRendezVous statut) {
   }
 }
 
+/// Badge coloré du statut (« Confirmé », « En attente"...).
+/// Réutilisé par la carte ci-dessous et par les écrans de détail.
+class ChipStatutRdv extends StatelessWidget {
+  final StatutRendezVous statut;
+
+  const ChipStatutRdv({super.key, required this.statut});
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = couleurStatutRdv(statut);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        // Couleur pleine diluée à 12 % → fond pastel assorti au statut.
+        color: couleur.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(Rayons.pillule),
+      ),
+      child: Text(
+        libelleStatutRdv(statut),
+        style: TextStyle(
+          color: couleur,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 /// Carte cliquable représentant un rendez-vous.
-/// Utilisée sur le tableau de bord et sur l'écran "liste des rendez-vous".
-// "StatelessWidget" = un widget qui n'a pas de mémoire interne : il
-// affiche toujours la même chose tant qu'on ne lui redonne pas de
-// nouvelles données depuis l'extérieur (par opposition à StatefulWidget,
-// qui peut changer tout seul, voir plus bas dans d'autres fichiers).
+/// Utilisée sur les deux dashboards et sur les écrans « liste des RDV ».
 class RendezVousCard extends StatelessWidget {
-  // Les données que ce widget a besoin de recevoir pour s'afficher.
-  final RendezVous rdv; // le rendez-vous à afficher
-  // Une fonction à appeler quand on tape sur la carte. Le "?" la rend
-  // optionnelle : si on ne la fournit pas, la carte ne réagit pas au clic.
+  /// Le rendez-vous à afficher.
+  final RendezVous rdv;
+
+  /// Fonction appelée au clic (null = carte non cliquable).
   final VoidCallback? onTap;
 
-  // Nouveau paramètre, "false" par défaut : quand la secrétaire affiche
-  // sa liste de rendez-vous (plusieurs médecins mélangés), elle a besoin
-  // de voir le nom du médecin concerné. Côté médecin, on laisse la valeur
-  // par défaut (false) : pas besoin, il ne voit que ses propres rendez-vous.
+  /// true côté secrétaire : elle voit plusieurs médecins mélangés, elle
+  /// a donc besoin du nom du médecin concerné sous le nom du patient.
   final bool afficherMedecin;
 
-  // Constructeur. "super.key" transmet le paramètre "key" à la classe
-  // parente (StatelessWidget) : c'est une convention Flutter qui aide
-  // le framework à identifier ce widget précis quand il redessine l'écran.
   const RendezVousCard({
     super.key,
     required this.rdv,
     this.onTap,
-    this.afficherMedecin = false, // valeur par défaut si on ne précise rien
+    this.afficherMedecin = false,
   });
 
-  // La méthode build() décrit CE QUI DOIT S'AFFICHER À L'ÉCRAN.
-  // Flutter l'appelle automatiquement à chaque fois qu'il a besoin de
-  // (re)dessiner ce widget. "BuildContext context" donne accès à des
-  // infos sur la position de ce widget dans l'arbre de l'application
-  // (thème, taille de l'écran, navigation...).
   @override
   Widget build(BuildContext context) {
-    // On calcule une fois la couleur correspondant au statut, pour ne
-    // pas répéter couleurStatutRdv(rdv.statut) plusieurs fois plus bas.
-    final couleur = couleurStatutRdv(rdv.statut);
+    // Sous-titre : nom du médecin (si demandé), sinon le motif de la
+    // consultation, sinon un texte par défaut.
+    final sousTitre = afficherMedecin && rdv.medecinNom != null
+        ? rdv.medecinNom!
+        : (rdv.motif != null && rdv.motif!.isNotEmpty
+              ? rdv.motif!
+              : 'Consultation');
 
-    // InkWell rend n'importe quel widget cliquable, avec un petit effet
-    // visuel "d'encre qui s'étale" au clic (typique Material Design).
-    return InkWell(
-      onTap: onTap, // fonction appelée au clic (peut être null = pas cliquable)
-      // Arrondit aussi l'effet visuel du clic pour qu'il suive la forme
-      // de la carte (sinon l'effet déborderait en rectangle).
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        // Espace vide EN DEHORS du cadre (entre cette carte et les autres).
-        margin: const EdgeInsets.only(bottom: 10),
-        // Espace vide À L'INTÉRIEUR du cadre (entre le bord et le contenu).
-        padding: const EdgeInsets.all(14),
-        // "decoration" permet de styliser le fond, les bords, les coins...
-        decoration: BoxDecoration(
-          color: Colors.white, // fond blanc
-          borderRadius: BorderRadius.circular(14), // coins arrondis
-          // Bordure fine, presque invisible (6% d'opacité de noir).
-          border: Border.all(color: Colors.black.withOpacity(0.06)),
-        ),
-        // "Row" aligne ses enfants HORIZONTALEMENT, les uns à côté des autres.
-        child: Row(
-          children: [
-            // Petit trait de couleur vertical à gauche de la carte,
-            // qui indique visuellement le statut d'un coup d'œil.
-            Container(
-              width: 4,
-              height: 40,
-              decoration: BoxDecoration(
-                color: couleur,
-                borderRadius: BorderRadius.circular(2),
+    // CarteMedigo apporte le blanc, les coins arrondis, l'ombre douce
+    // et l'effet de survol — on ne gère ici que le CONTENU.
+    return CarteMedigo(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      child: Row(
+        children: [
+          // Pastille horaire : l'information la plus lue d'un coup
+          // d'œil, mise en avant à gauche ( fond bleu très clair).
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.bleuMedical.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(Rayons.petite),
+            ),
+            child: Text(
+              rdv.heure,
+              style: const TextStyle(
+                color: AppColors.bleuMedical,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            // Espace vide fixe de 12 pixels entre le trait et le texte.
-            const SizedBox(width: 12),
-            // "Expanded" dit à ce widget de prendre TOUT l'espace
-            // horizontal restant dans la Row (sinon le texte pourrait
-            // être coupé ou la Row planterait si le contenu est trop large).
-            Expanded(
-              // "Column" aligne ses enfants VERTICALEMENT, les uns
-              // au-dessus des autres.
-              child: Column(
-                // Aligne le texte à gauche (au lieu du centre par défaut).
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    // Getter défini dans le modèle RendezVous :
-                    // combine prénom + nom du patient.
-                    rdv.patientNomComplet,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 12),
+          // Expanded : le bloc de texte prend l'espace restant.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rdv.patientNomComplet,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.texte,
                   ),
-                  const SizedBox(height: 2), // petit espace vertical
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  sousTitre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.texteFaible,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ChipStatutRdv(statut: rdv.statut),
+        ],
+      ),
+    );
+  }
+}
+
+/// Panneau « répartition du jour » : comptage des rendez-vous par
+/// statut, en lignes « libellé …… nombre » — sans icône.
+/// Utilisé dans le panneau latéral des deux dashboards.
+class RepartitionStatuts extends StatelessWidget {
+  final List<RendezVous> rdvs;
+
+  const RepartitionStatuts({super.key, required this.rdvs});
+
+  @override
+  Widget build(BuildContext context) {
+    int nb(StatutRendezVous s) => rdvs.where((r) => r.statut == s).length;
+
+    // (libellé, nombre, couleur) — record Dart 3.
+    final lignes = <(String, int, Color)>[
+      ('Confirmés', nb(StatutRendezVous.confirme), AppColors.vertSante),
+      ('En attente', nb(StatutRendezVous.enAttente), AppColors.ambre),
+      ('Terminés', nb(StatutRendezVous.termine), AppColors.texteFaible),
+      (
+        'Annulés / refusés',
+        nb(StatutRendezVous.annule) + nb(StatutRendezVous.refuse),
+        AppColors.rouge,
+      ),
+    ];
+
+    return CarteMedigo(
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
+      child: Column(
+        children: [
+          for (var i = 0; i < lignes.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      lignes[i].$1,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        color: AppColors.texteFaible,
+                      ),
+                    ),
+                  ),
                   Text(
-                    // "if (condition) ... else ..." dans un template de texte
-                    // n'existe pas directement : on utilise l'opérateur "?:"
-                    // pour choisir le texte à afficher selon afficherMedecin.
-                    afficherMedecin && rdv.medecinNom != null
-                        ? '${rdv.heure} · ${rdv.medecinNom}'
-                        : rdv.heure,
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    lignes[i].$2.toString(),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: lignes[i].$3,
+                    ),
                   ),
                 ],
               ),
             ),
-            // Petit badge coloré affichant le statut en toutes lettres
-            // (ex: "Confirmé"), à droite de la carte.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                // Même couleur que le trait, mais très transparente (12%),
-                // pour un fond pastel assorti au statut.
-                color: couleur.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                libelleStatutRdv(rdv.statut),
-                style: TextStyle(
-                  color: couleur, // texte dans la couleur pleine du statut
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            // Petite flèche ">" tout à droite, qui suggère visuellement
-            // "tape ici pour voir plus de détails".
-            const Icon(Icons.chevron_right, color: Colors.black26, size: 20),
           ],
-        ),
+        ],
       ),
     );
   }
