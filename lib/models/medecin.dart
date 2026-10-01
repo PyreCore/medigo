@@ -80,4 +80,20 @@ class Medecin {
       specialiteId: json['specialiteId']?.toString(),
     );
   }
+
+  /// Deux Medecin sont le même s'ils portent le même id de document.
+  ///
+  /// Dart compare par défaut les objets par IDENTITÉ. Or un médecin est relu
+  /// depuis Firestore à chaque chargement, et le sélecteur du formulaire de
+  /// rendez-vous conserve l'exemplaire précédent : sans cet opérateur, le
+  /// DropdownButton ne trouve plus aucun item portant sa valeur et lève
+  /// l'assertion "There should be exactly one item with [DropdownButton]'s
+  /// value", ce qui affiche l'écran rouge en plein parcours de réservation.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Medecin && runtimeType == other.runtimeType && id == other.id);
+
+  @override
+  int get hashCode => id.hashCode;
 }

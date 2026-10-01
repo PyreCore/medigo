@@ -25,4 +25,19 @@ class Specialite {
       hopitalId: json['hopitalId']?.toString() ?? '',
     );
   }
+
+  /// Deux Specialite sont la même si elles portent le même id de document.
+  ///
+  /// Cf. Hopital.operator == : sans cet opérateur, un DropdownButton
+  /// comparant par identité perd sa sélection dès que la liste est relue
+  /// depuis Firestore, et plante sur une assertion.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Specialite &&
+          runtimeType == other.runtimeType &&
+          id == other.id);
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -224,6 +224,27 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
     }).toList();
   }
 
+  /// Change le texte de recherche, et retire le médecin choisi s'il ne
+  /// correspond plus.
+  ///
+  /// C'est indispensable, et pas seulement esthétique : la liste affichée
+  /// par le DropdownButton est `_medecinsFiltres`, alors que sa valeur
+  /// retenue est `_medecinChoisi`. Si le médecin choisi sort du filtre, les
+  /// deux divergent et Flutter lève l'assertion « There should be exactly one
+  /// item with [DropdownButton]'s value » — l'écran passe au rouge. On
+  /// déselecte donc le médecin, comme on le fait déjà au changement de
+  /// spécialité, et son créneau part avec lui puisqu'il en dépendait.
+  void _filtrerMedecins(String texte) {
+    setState(() {
+      _recherche = texte;
+      final idsVisibles = _medecinsFiltres.map((m) => m.id).toSet();
+      if (_medecinChoisi != null && !idsVisibles.contains(_medecinChoisi!.id)) {
+        _medecinChoisi = null;
+        _creneauChoisi = null;
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------
   // Disponibilités
   // ---------------------------------------------------------------------
@@ -399,6 +420,15 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
     final medecins = _medecinsFiltres;
     final rdv = widget.rendezVousAModifier;
 
+    // Filet de sécurité du DropdownButtonFormField<Mecin> : Flutter exige
+    // qu'exactly un item porte la valeur affichée, et lève sinon une
+    // assertion qui met l'écran au rouge. Le médecin retenu n'est retenu
+    // que s'il figure encore dans la liste filtrée — c'est le cas normal
+    // (et `_filtrerMedecins` le désélectionne dès que ce n'est plus vrai),
+    // mais on ne laisse pas une divergence possible devenir un plantage.
+    final medecinAffiche =
+        medecins.any((m) => m.id == _medecinChoisi?.id) ? _medecinChoisi : null;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -499,7 +529,7 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
           // cumulent.
           TextField(
             controller: _controllerRecherche,
-            onChanged: (valeur) => setState(() => _recherche = valeur),
+            onChanged: _filtrerMedecins,
             decoration: const InputDecoration(
               labelText: 'Rechercher un médecin',
               hintText: 'Nom du médecin ou spécialité',
@@ -509,7 +539,7 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<Medecin>(
-            initialValue: _medecinChoisi,
+            initialValue: medecinAffiche,
             decoration: const InputDecoration(
               labelText: 'Médecin',
               prefixIcon: Icon(Icons.person),
