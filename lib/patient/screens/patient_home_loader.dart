@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// "unawaited" : on lance la programmation des rappels sans l'attendre, pour
+// ne pas retarder l'affichage de l'espace. Importé de dart:async, pas de
+// flutter, car c'est un utilitaire du langage.
+import 'dart:async';
 import '../../models/medecin.dart';
 import '../../models/patient.dart';
 import '../../models/rendez_vous.dart';
 import '../../services/patient_service.dart';
 import '../../shared/models/hopital_model.dart';
+import '../../services/notification_service.dart';
 import 'espace_patient.dart';
 
 /// Écran "intermédiaire" affiché juste après la connexion d'un patient :
@@ -87,6 +92,13 @@ class _PatientHomeLoaderState extends State<PatientHomeLoader> {
           _rendezVousDuJour = duJour;
           _stats = stats;
         });
+
+        // Les rappels sont reprogrammés à CHAQUE chargement, et non à chaque
+        // action : c'est ce qui fait qu'une annulation ou une
+        // reprogrammation disparaisse des rappels, puisque le set complet
+        // est reconstruit à partir de Firestore. On n'attend pas ce
+        // rechargement pour afficher l'écran.
+        unawaited(NotificationService.instance.planifierRappels(tous));
       }
     } catch (e) {
       if (mounted) setState(() => _erreur = e.toString());
@@ -146,8 +158,15 @@ class _PatientHomeLoaderState extends State<PatientHomeLoader> {
 
   Future<void> _deconnexion() async {
     await FirebaseAuth.instance.signOut();
+    // Un téléphone partagé ne doit pas laisser les rappels du compte qui
+    // vient de sortir : ils continuaient d'afficher le nom du médecin.
+    await NotificationService.instance.toutAnnuler();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      // Deconnexion : on revient a l'accueil PUBLIC et on vide la pile.
+      // Un simple pushReplacementNamed laisserait l'espace prive sous
+      // l'accueil, et le bouton retour renverrait dans un ecran qui
+      // suppose encore une session ouverte.
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
     }
   }
 
