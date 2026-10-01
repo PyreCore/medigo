@@ -1,0 +1,37 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "hopitalId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rendez_vous",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hopitalId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rendez_vous",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "medecinId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "creneaux_occupes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "medecinId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
