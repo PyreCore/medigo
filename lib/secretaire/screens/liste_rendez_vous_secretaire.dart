@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
+import '../../theme/medigo_theme.dart';
 import '../../widgets/rendez_vous_card.dart';
 
 /// Onglet "Rendez-vous" : liste complète des rendez-vous de l'hôpital
@@ -101,21 +102,28 @@ class _ListeRendezVousSecretaireState
     );
   }
 
-  // Construit une "puce" cliquable (ChoiceChip) pour un filtre donné.
-  // "valeur" est le statut associé (ou null pour "Tous").
+  // Construit une "puce" cliquable pour un filtre donné.
+  // Design épuré : texte seul, sans rectangle ni bordure.
+  // La puce active est en gras et colorée, les autres en gris.
   Widget _puceFiltre(StatutRendezVous? valeur, String libelle) {
-    return ChoiceChip(
-      label: Text(libelle),
-      // "selected" détermine si la puce apparaît "active" visuellement :
-      // vrai quand le filtre actuellement choisi correspond à cette puce.
-      selected: _filtreActif == valeur,
-      // Appelé quand on tape sur la puce. "setState" prévient Flutter
-      // qu'une donnée a changé et qu'il doit redessiner l'écran.
-      onSelected: (_) {
+    final estActif = _filtreActif == valeur;
+    return GestureDetector(
+      onTap: () {
         setState(() {
           _filtreActif = valeur;
         });
       },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(
+          libelle,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: estActif ? FontWeight.w700 : FontWeight.w400,
+            color: estActif ? AppColors.bleuMedical : AppColors.texteFaible,
+          ),
+        ),
+      ),
     );
   }
 }

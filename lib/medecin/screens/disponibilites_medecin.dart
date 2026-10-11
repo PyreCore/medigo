@@ -248,6 +248,8 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Bandeau informatif : la gestion des horaires est réservée
+        // à la secrétaire de l'hôpital. Le médecin ne fait que consulter.
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -255,8 +257,8 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Text(
-            'Les créneaux que vous déclarez ici sont ceux que les patients '
-            'peuvent réserver. Un créneau déjà pris disparaît de leur liste.',
+            'Vos horaires sont gérés par la secrétaire de l\'hôpital. '
+            'Pour toute modification, contactez-la directement.',
             style: TextStyle(fontSize: 12, color: Colors.black87),
           ),
         ),
@@ -265,10 +267,10 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
           _CarteJour(
             jour: jour,
             toutesLesPlages: _disponibilites.where((d) => d.jour == jour).toList(),
-            onAjouter: () => _ajouter(jour),
-            onModifier: _modifier,
-            onSupprimer: _supprimer,
-            onBasculer: _basculer,
+            onAjouter: null, // désactivé : la secrétaire gère les horaires
+            onModifier: null,
+            onSupprimer: null,
+            onBasculer: null,
           ),
       ],
     );
@@ -284,21 +286,24 @@ class _Plage {
 }
 
 /// Carte d'un jour : la liste de ses plages, avec les actions sur chacune.
+/// Les callbacks sont optionnels : si null, l'action correspondante n'est
+/// pas affichée (mode lecture seule).
 class _CarteJour extends StatelessWidget {
   final int jour;
   final List<Disponibilite> toutesLesPlages; // actives ET inactives
-  final VoidCallback onAjouter;
-  final Future<void> Function(Disponibilite) onModifier;
-  final Future<void> Function(Disponibilite) onSupprimer;
-  final Future<void> Function(Disponibilite) onBasculer;
+  final VoidCallback? onAjouter;
+  final Future<void> Function(Disponibilite)? onModifier;
+  final Future<void> Function(Disponibilite)? onSupprimer;
+  final Future<void> Function(Disponibilite)? onBasculer;
 
   const _CarteJour({
+    super.key,
     required this.jour,
     required this.toutesLesPlages,
-    required this.onAjouter,
-    required this.onModifier,
-    required this.onSupprimer,
-    required this.onBasculer,
+    this.onAjouter,
+    this.onModifier,
+    this.onSupprimer,
+    this.onBasculer,
   });
 
   @override
@@ -326,11 +331,13 @@ class _CarteJour extends StatelessWidget {
                     ),
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: onAjouter,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Ajouter'),
-                ),
+                // Bouton "Ajouter" visible uniquement si onAjouter est fourni.
+                if (onAjouter != null)
+                  TextButton.icon(
+                    onPressed: onAjouter,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Ajouter'),
+                  ),
               ],
             ),
             if (toutesLesPlages.isEmpty)
@@ -345,9 +352,9 @@ class _CarteJour extends StatelessWidget {
               ...toutesLesPlages.map(
                 (plage) => _LignePlage(
                   plage: plage,
-                  onModifier: () => onModifier(plage),
-                  onSupprimer: () => onSupprimer(plage),
-                  onBasculer: () => onBasculer(plage),
+                  onModifier: onModifier,
+                  onSupprimer: onSupprimer,
+                  onBasculer: onBasculer,
                 ),
               ),
           ],
@@ -358,17 +365,20 @@ class _CarteJour extends StatelessWidget {
 }
 
 /// Une plage horaire, avec ses trois actions.
+/// Les callbacks sont optionnels : si null, le bouton correspondant
+/// n'est pas affiché (mode lecture seule).
 class _LignePlage extends StatelessWidget {
   final Disponibilite plage;
-  final VoidCallback onModifier;
-  final VoidCallback onSupprimer;
-  final VoidCallback onBasculer;
+  final Future<void> Function(Disponibilite)? onModifier;
+  final Future<void> Function(Disponibilite)? onSupprimer;
+  final Future<void> Function(Disponibilite)? onBasculer;
 
   const _LignePlage({
+    super.key,
     required this.plage,
-    required this.onModifier,
-    required this.onSupprimer,
-    required this.onBasculer,
+    this.onModifier,
+    this.onSupprimer,
+    this.onBasculer,
   });
 
   @override
@@ -391,21 +401,27 @@ class _LignePlage extends StatelessWidget {
             ),
           ),
         ),
-        Switch(
-          value: plage.actif,
-          activeThumbColor: const Color(0xFF2E6F6E),
-          onChanged: (_) => onBasculer(),
-        ),
-        IconButton(
-          tooltip: 'Modifier',
-          icon: const Icon(Icons.edit_outlined, size: 20),
-          onPressed: onModifier,
-        ),
-        IconButton(
-          tooltip: 'Supprimer',
-          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-          onPressed: onSupprimer,
-        ),
+        // Interrupteur visible uniquement si onBasculer est fourni.
+        if (onBasculer != null)
+          Switch(
+            value: plage.actif,
+            activeThumbColor: const Color(0xFF2E6F6E),
+            onChanged: (_) => onBasculer!(plage),
+          ),
+        // Bouton "Modifier" visible uniquement si onModifier est fourni.
+        if (onModifier != null)
+          IconButton(
+            tooltip: 'Modifier',
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            onPressed: () => onModifier!(plage),
+          ),
+        // Bouton "Supprimer" visible uniquement si onSupprimer est fourni.
+        if (onSupprimer != null)
+          IconButton(
+            tooltip: 'Supprimer',
+            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+            onPressed: () => onSupprimer!(plage),
+          ),
       ],
     );
   }

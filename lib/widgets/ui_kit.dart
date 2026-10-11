@@ -418,16 +418,6 @@ class TuileStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fin trait d'accent de 28 px en haut à gauche.
-          Container(
-            height: 3,
-            width: 28,
-            decoration: BoxDecoration(
-              color: couleur,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 12),
           // Compteur animé : le chiffre « défile » de 0 jusqu'à sa
           // valeur au chargement, puis se ré-anime quand il change.
           _CompteurAnime(valeur: valeur),

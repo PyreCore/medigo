@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/secretaire.dart';
@@ -29,10 +30,30 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
   Map<String, int> _stats = {};
   String? _erreur;
 
+  /// Timer qui recharge automatiquement les données toutes les 5 s.
+  /// Permet à la secrétaire de voir les nouvelles demandes sans
+  /// rafraîchir manuellement la page.
+  Timer? _timerRafraichir;
+
+  /// Ancienne liste des RDV en attente, pour détecter les nouvelles
+  /// demandes à chaque rechargement et afficher une notification.
+  Set<String> _anciensIdsEnAttente = {};
+
   @override
   void initState() {
     super.initState();
     _charger();
+    // Rechargement automatique toutes les 5 secondes.
+    _timerRafraichir = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _charger(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timerRafraichir?.cancel();
+    super.dispose();
   }
 
   Future<void> _charger() async {
@@ -45,7 +66,11 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       final hopitalId = secretaire.hopitalId;
       final patients = await _service.getPatientsPourHopital(hopitalId);
       final medecins = await _service.getMedecinsHopital(hopitalId);
-      final rendezVous = await _service.getRendezVousDuJour(hopitalId);
+      // getTousRendezVous (et non getRendezVousDuJour) : la secrétaire
+      // doit voir TOUS les RDV de l'hôpital, y compris ceux qu'elle
+      // programme à des dates futures. Le filtre "du jour" est fait
+      // dans l'éconglet Rendez-vous si besoin.
+      final rendezVous = await _service.getTousRendezVous(hopitalId);
       final stats = await _service.getStatistiques(hopitalId);
 
       // 'totalPatients' n'est pas calculé par le service (compter demanderait
@@ -54,6 +79,14 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       final statistiques = {...stats, 'totalPatients': patients.length};
 
       if (mounted) {
+        // Détection de nouvelles demandes : on compare les IDs des
+        // RDV en attente actuels avec ceux du chargement précédent.
+        final idsEnAttente = rendezVous
+            .where((r) => r.statut == StatutRendezVous.enAttente)
+            .map((r) => r.id)
+            .toSet();
+        final nouveaux = idsEnAttente.difference(_anciensIdsEnAttente);
+
         setState(() {
           _secretaire = secretaire;
           _patients = patients;
@@ -61,6 +94,20 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
           _rendezVous = rendezVous;
           _stats = statistiques;
         });
+
+        // Notification si de nouvelles demandes sont arrivées
+        // (uniquement après le chargement initial, pas au démarrage).
+        if (_anciensIdsEnAttente.isNotEmpty && nouveaux.isNotEmpty) {
+          messageFlash(
+            context,
+            nouveaux.length == 1
+                ? 'Nouvelle demande de rendez-vous'
+                : '${nouveaux.length} nouvelles demandes de rendez-vous',
+          );
+        }
+
+        // On mémorise les IDs actuels pour le prochain rechargement.
+        _anciensIdsEnAttente = idsEnAttente;
       }
     } catch (e) {
       if (mounted) setState(() => _erreur = e.toString());
@@ -111,6 +158,12 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
     await _service.confirmerRendezVous(rdv.id);
     await _charger();
     if (mounted) messageFlash(context, 'Rendez-vous confirmé');
+  }
+
+  Future<void> _refuser(RendezVous rdv, {String? motif}) async {
+    await _service.refuserRendezVous(rdv.id, motif: motif);
+    await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous refusé');
   }
 
   Future<void> _annuler(RendezVous rdv) async {
@@ -192,6 +245,7 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       onProgrammerRendezVous: _programmerRendezVous,
       onConfirmerRendezVous: _confirmer,
       onAnnulerRendezVous: _annuler,
+      onRefuserRendezVous: _refuser,
       onRafraichir: _charger,
       onDeconnexion: _deconnexion,
     );

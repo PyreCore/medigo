@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/medecin.dart';
@@ -30,10 +31,30 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
   Map<String, int> _stats = {};
   String? _erreur;
 
+  /// Timer qui recharge automatiquement les données toutes les 5 s.
+  /// Permet au médecin de voir les nouveaux rendez-vous (confirmés
+  /// par la secrétaire, ou en attente) sans rafraîchir manuellement.
+  Timer? _timerRafraichir;
+
+  /// Ancienne liste des IDs de RDV, pour détecter les nouveautés
+  /// à chaque rechargement et afficher une notification.
+  Set<String> _anciensIds = {};
+
   @override
   void initState() {
     super.initState();
     _charger();
+    // Rechargement automatique toutes les 5 secondes.
+    _timerRafraichir = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _charger(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timerRafraichir?.cancel();
+    super.dispose();
   }
 
   Future<void> _charger() async {
@@ -42,18 +63,41 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       // On charge le profil d'abord, car on a besoin de son id pour
       // demander ensuite SES rendez-vous et SES statistiques.
       final medecin = await _service.getProfilConnecte();
-      final rendezVous = await _service.getRendezVousDuJour(medecin.id);
+      // getTousRendezVous (et non getRendezVousDuJour) : le médecin
+      // doit voir TOUS ses RDV, y compris ceux confirmés par la
+      // secrétaire à des dates futures. Le filtre "du jour" est fait
+      // dans l'écran d'accueil si besoin.
+      final rendezVous = await _service.getTousRendezVous(medecin.id);
       final stats = await _service.getStatistiques(medecin.id);
 
       // On ne met à jour l'état qu'une seule fois, avec toutes les
       // données prêtes en même temps, plutôt que 3 fois séparément
       // (évite 2 reconstructions d'écran inutiles).
       if (mounted) {
+        // Détection de nouveaux rendez-vous : on compare les IDs
+        // actuels avec ceux du chargement précédent.
+        final idsActuels = rendezVous.map((r) => r.id).toSet();
+        final nouveaux = idsActuels.difference(_anciensIds);
+
         setState(() {
           _medecin = medecin;
           _rendezVous = rendezVous;
           _stats = stats;
         });
+
+        // Notification si de nouveaux RDV sont arrivés
+        // (uniquement après le chargement initial).
+        if (_anciensIds.isNotEmpty && nouveaux.isNotEmpty) {
+          messageFlash(
+            context,
+            nouveaux.length == 1
+                ? 'Nouveau rendez-vous'
+                : '${nouveaux.length} nouveaux rendez-vous',
+          );
+        }
+
+        // On mémorise les IDs actuels pour le prochain rechargement.
+        _anciensIds = idsActuels;
       }
     } catch (e) {
       if (mounted) setState(() => _erreur = e.toString());

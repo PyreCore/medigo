@@ -206,6 +206,8 @@ class AccueilSecretaire extends StatelessWidget {
           const SizedBox(height: 24),
 
           // ── 4. Grille responsive : liste + panneau latéral ───────
+          // Sur mobile : tout est en colonne (empilé), jamais de Row
+          // avec des largeurs fixes qui déborderaient.
           LayoutBuilder(
             builder: (context, contraintes) {
               // Colonne gauche : les rendez-vous du jour de l'hôpital.
@@ -220,14 +222,11 @@ class AccueilSecretaire extends StatelessWidget {
                       detail: 'Les nouveaux rendez-vous apparaîtront ici.',
                     )
                   else
-                    // Apparition décalée : 60 ms entre chaque carte.
                     ...rendezVousDuJour.asMap().entries.map(
                       (entree) => Apparition(
                         delaiMs: 160 + (entree.key * 60),
                         child: RendezVousCard(
                           rdv: entree.value,
-                          // La secrétaire voit plusieurs médecins :
-                          // on affiche le nom du médecin sous le patient.
                           afficherMedecin: true,
                           onTap: onTapRendezVous != null
                               ? () => onTapRendezVous!(entree.value)
@@ -267,7 +266,7 @@ class AccueilSecretaire extends StatelessWidget {
                   children: [
                     Expanded(flex: 7, child: liste),
                     const SizedBox(width: 24),
-                    SizedBox(width: 340, child: panneau),
+                    Expanded(flex: 3, child: panneau),
                   ],
                 );
               }

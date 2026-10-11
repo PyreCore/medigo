@@ -55,7 +55,10 @@ class StructureEspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contenu = IndexedStack(index: indexActif, children: onglets);
+    // Affichage direct de l'onglet actif (pas d'IndexedStack) :
+    // les ListView enfants ont besoin d'une hauteur contrainte, ce que
+    // IndexedStack dans un Center ne leur donne pas → écran blanc.
+    final contenu = onglets[indexActif];
 
     return LayoutBuilder(
       builder: (context, contraintes) {
@@ -91,9 +94,17 @@ class StructureEspace extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Contenu centré, largeur maximale pour rester
-                      // lisible sur très grands écrans.
-                      Expanded(child: _centre(contenu, 1120)),
+                      // Contenu : Container avec largeur maximale (pas de
+                      // Center qui absorberait les contraintes de hauteur).
+                      Expanded(
+                        child: Container(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1120),
+                            child: contenu,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -102,11 +113,20 @@ class StructureEspace extends StatelessWidget {
           );
         }
 
-        // ── Écran ÉTROIT : barre haut + barre basse ────────────────
+        // ── MOBILE : barre haute + barre basse, contenu compact ──
+        // Le contenu est mis directement dans le body (le Scaffold donne
+        // des contraintes de hauteur bornées — indispensable aux ListView).
+        // ConstrainedBox borne seulement la largeur, sans casser la hauteur.
         return Scaffold(
           backgroundColor: AppColors.fond,
           appBar: BarreHauteMedigo(titre: libelles[indexActif]),
-          body: _centre(contenu, 720),
+          body: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: contenu,
+            ),
+          ),
           bottomNavigationBar: _BarreBasseMedigo(
             libelles: libelles,
             indexActif: indexActif,
@@ -114,17 +134,6 @@ class StructureEspace extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  // Contenu centré avec largeur maximale : la mise en page reste
-  // identique (et lisible) quelle que soit la taille de la fenêtre.
-  Widget _centre(Widget contenu, double largeurMax) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: largeurMax),
-        child: contenu,
-      ),
     );
   }
 }

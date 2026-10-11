@@ -256,7 +256,7 @@ class AccueilMedecin extends StatelessWidget {
                   children: [
                     Expanded(flex: 7, child: liste),
                     const SizedBox(width: 24),
-                    SizedBox(width: 340, child: panneau),
+                    Expanded(flex: 3, child: panneau),
                   ],
                 );
               }

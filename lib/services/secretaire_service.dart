@@ -58,6 +58,39 @@ class SecretaireService {
         .toList();
   }
 
+  /// Récupère tous les rendez-vous de l'hôpital (tous médecins confondus),
+  /// TOUTES dates confondues, triés par date.
+  ///
+  /// Contrairement à getRendezVousDuJour, cette méthode ne filtre pas par
+  /// date : elle retourne aussi les rendez-vous passés et futurs. C'est
+  /// indispensable pour que la secrétaire voie les RDV qu'elle vient de
+  /// programmer (qui peuvent être à une date ultérieure).
+  Future<List<RendezVous>> getTousRendezVous(String hopitalId) async {
+    final snapshot = await _db
+        .collection('rendez_vous')
+        .where('hopitalId', isEqualTo: hopitalId)
+        .get();
+
+    final liste = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return RendezVous.fromJson({
+        'id': doc.id,
+        'patient_nom': data['patientNom'],
+        'patient_prenom': data['patientPrenom'],
+        'date': (data['date'] as Timestamp).toDate().toIso8601String(),
+        'heure': data['heure'],
+        'statut': data['statut'],
+        'motif': data['motif'],
+        'medecin_id': data['medecinId'],
+        'medecin_nom': data['medecinNom'],
+        'hopital_id': data['hopitalId'],
+      });
+    }).toList();
+
+    liste.sort((a, b) => a.date.compareTo(b.date));
+    return liste;
+  }
+
   /// Récupère tous les rendez-vous de l'hôpital (tous médecins confondus)
   /// pour la journée en cours, triés par heure.
   ///
@@ -313,6 +346,34 @@ class SecretaireService {
       'statut': 'confirme',
     });
   }
+
+  /// Refuse un rendez-vous avec un motif (change son statut + libère le créneau).
+  ///
+  /// Le refus libère le créneau : une heure refusée redevient disponible
+  /// pour les patients en ligne. Le motif est enregistré dans le champ
+  /// 'motifRefus' pour que le patient comprenne la décision.
+  Future<void> refuserRendezVous(String rdvId, {String? motif}) async {
+    await _db.collection('rendez_vous').doc(rdvId).update({
+      'statut': 'refuse',
+      // Null-aware element : envoyé seulement si un motif a été saisi.
+      'motifRefus': ?motif,
+    });
+    await _creneaux.liberer(rdvId);
+  }
+
+  /// Liste des motifs de refus prédéfinis, proposés à la secrétaire
+  /// pour refuser rapidement un rendez-vous sans taper de texte.
+  ///
+  /// Le dernier élément est toujours "Autre motif" : la secrétaire
+  /// peut ainsi choisir une raison personnalisée si aucune des options
+  /// prédéfinies ne convient.
+  static const List<String> motifsRefus = [
+    'Cause d\'absence du médecin : le médecin est temporairement indisponible',
+    'Créneau déjà occupé : un autre rendez-vous a été confirmé à cette heure',
+    'Demande incomplète : informations manquantes du patient',
+    'Horaire non disponible : en dehors des heures de consultation',
+    'Autre motif (à préciser)',
+  ];
 
   /// Annule un rendez-vous (change son statut).
   ///

@@ -234,7 +234,6 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
             infos: [
               ('Spécialité', _ouRenseigne(widget.medecin.specialite)),
               ('Hôpital', _ouRenseigne(widget.medecin.hopitalNom)),
-              ('Rôle', 'Médecin'),
             ],
           ),
         ),

@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
+import '../../theme/medigo_theme.dart';
 import '../../widgets/rendez_vous_card.dart';
+import '../../widgets/ui_kit.dart';
+import 'refuser_rendez_vous_secretaire.dart';
 
-/// Écran de détail d'un rendez-vous, avec les actions Confirmer/Annuler
+/// Écran de détail d'un rendez-vous, avec les actions Confirmer/Refuser/Annuler
 /// réservées à la secrétaire (différent des actions du médecin, qui
 /// "accepte" ou "refuse" une consultation).
 class DetailRendezVousSecretaire extends StatelessWidget {
   final RendezVous rdv;
   final VoidCallback onConfirmer;
   final VoidCallback onAnnuler;
+  // Refus avec motif : la secrétaire choisit une raison parmi une liste
+  // prédéfinie (ou saisit un motif libre) avant de confirmer le refus.
+  final Future<void> Function(RendezVous rdv, {String? motif}) onRefuser;
 
   const DetailRendezVousSecretaire({
     super.key,
     required this.rdv,
     required this.onConfirmer,
     required this.onAnnuler,
+    required this.onRefuser,
   });
 
   @override
@@ -38,35 +45,60 @@ class DetailRendezVousSecretaire extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // On ne propose Confirmer/Annuler que si le rendez-vous est
+          // On ne propose les actions que si le rendez-vous est
           // encore "en_attente" : inutile de confirmer un RDV déjà
-          // confirmé, ou d'annuler un RDV déjà annulé/terminé.
-          if (rdv.statut == StatutRendezVous.enAttente)
+          // confirmé, ou d'annuler/refuser un RDV déjà traité.
+          if (rdv.statut == StatutRendezVous.enAttente) ...[
+            // Ligne 1 : Annuler (rouge) + Confirmer (vert).
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: BoutonContour(
+                    texte: 'Annuler',
+                    couleur: AppColors.rouge,
                     onPressed: onAnnuler,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFC62828),
-                      side: const BorderSide(color: Color(0xFFC62828)),
-                    ),
-                    child: const Text('Annuler'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton(
+                  child: BoutonPrincipal(
+                    texte: 'Confirmer',
+                    couleur: AppColors.vertSante,
                     onPressed: onConfirmer,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                    ),
-                    child: const Text('Confirmer'),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            // Ligne 2 : Refuser (rouge, pleine largeur).
+            BoutonContour(
+              texte: 'Refuser',
+              couleur: AppColors.rouge,
+              pleineLargeur: true,
+              onPressed: () => _ouvrirRefus(context),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Ouvre l'écran de sélection du motif de refus.
+  void _ouvrirRefus(BuildContext context) {
+    Navigator.push(
+      context,
+      routeMedigo(
+        builder: (_) => RefuserRendezVousSecretaire(
+          rdvId: rdv.id,
+          onRefuser: (rdvId, {motif}) async {
+            // Ferme l'écran de détail AVANT l'appel au service.
+            // L'écran de refus se ferme de son côté (Navigator.pop
+            // dans _confirmerRefus). Comme ça, pas de double-pop
+            // qui figerait l'interface.
+            if (context.mounted) Navigator.pop(context);
+            await onRefuser(rdv, motif: motif);
+          },
+        ),
       ),
     );
   }

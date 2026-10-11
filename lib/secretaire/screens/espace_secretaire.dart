@@ -47,6 +47,10 @@ class EspaceSecretaire extends StatefulWidget {
 
   final Future<void> Function(RendezVous rdv)? onConfirmerRendezVous;
   final Future<void> Function(RendezVous rdv)? onAnnulerRendezVous;
+  // Refus avec motif : la secrétaire choisit une raison parmi une liste
+  // prédéfinie avant de confirmer le refus.
+  final Future<void> Function(RendezVous rdv, {String? motif})?
+      onRefuserRendezVous;
   final Future<void> Function()? onRafraichir;
   final VoidCallback? onDeconnexion;
 
@@ -61,6 +65,7 @@ class EspaceSecretaire extends StatefulWidget {
     this.onProgrammerRendezVous,
     this.onConfirmerRendezVous,
     this.onAnnulerRendezVous,
+    this.onRefuserRendezVous,
     this.onRafraichir,
     this.onDeconnexion,
   });
@@ -97,6 +102,12 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
           onAnnuler: () async {
             if (widget.onAnnulerRendezVous != null) {
               await widget.onAnnulerRendezVous!(rdv);
+              if (mounted) Navigator.pop(context);
+            }
+          },
+          onRefuser: (rdv, {motif}) async {
+            if (widget.onRefuserRendezVous != null) {
+              await widget.onRefuserRendezVous!(rdv, motif: motif);
               if (mounted) Navigator.pop(context);
             }
           },

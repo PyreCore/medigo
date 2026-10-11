@@ -125,6 +125,36 @@ class MedecinService {
     return duJour;
   }
 
+  /// Récupère tous les rendez-vous du médecin, TOUTES dates et TOUS
+  /// statuts confondus, triés par date.
+  ///
+  /// Contrairement à getRendezVousDuJour, cette méthode ne filtre pas par
+  /// date : elle retourne aussi les rendez-vous passés et futurs. C'est
+  /// indispensable pour que le médecin voie les RDV confirmés par la
+  /// secrétaire à des dates ultérieures.
+  Future<List<RendezVous>> getTousRendezVous(String medecinId) async {
+    final snapshot = await _db
+        .collection('rendez_vous')
+        .where('medecinId', isEqualTo: medecinId)
+        .get();
+
+    final liste = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return RendezVous.fromJson({
+        'id': doc.id,
+        'patient_nom': data['patientNom'],
+        'patient_prenom': data['patientPrenom'],
+        'date': (data['date'] as Timestamp).toDate().toIso8601String(),
+        'heure': data['heure'],
+        'statut': data['statut'],
+        'motif': data['motif'],
+      });
+    }).toList();
+
+    liste.sort((a, b) => a.date.compareTo(b.date));
+    return liste;
+  }
+
   /// Calcule quelques statistiques simples pour le tableau de bord.
   Future<Map<String, int>> getStatistiques(String medecinId) async {
     // On réutilise la fonction déjà écrite au-dessus plutôt que de
