@@ -121,7 +121,7 @@ class RendezVousCard extends StatelessWidget {
           color: Colors.white, // fond blanc
           borderRadius: BorderRadius.circular(14), // coins arrondis
           // Bordure fine, presque invisible (6% d'opacité de noir).
-          border: Border.all(color: Colors.black.withOpacity(0.06)),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
         ),
         // "Row" aligne ses enfants HORIZONTALEMENT, les uns à côté des autres.
         child: Row(
@@ -180,7 +180,7 @@ class RendezVousCard extends StatelessWidget {
               decoration: BoxDecoration(
                 // Même couleur que le trait, mais très transparente (12%),
                 // pour un fond pastel assorti au statut.
-                color: couleur.withOpacity(0.12),
+                color: couleur.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(

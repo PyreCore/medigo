@@ -36,9 +36,10 @@ class StructureEspace extends StatelessWidget {
   /// Le DERNIER doit être « Profil » (la carte utilisateur y mène).
   final List<String> libelles;
 
-  /// Les écrans correspondants, empilés via IndexedStack (les écrans
-  /// non visibles restent en mémoire : la position de défilement et
-  /// l'état de chaque onglet sont donc conservés).
+  /// Les écrans correspondants. Seul l'onglet d'index [indexActif] est
+  /// construit à la fois (voir build) : c'est indispensable car les
+  /// ListView de chaque onglet exigent une hauteur contrainte, ce qu'un
+  /// empilement type IndexedStack dans un Center ne leur donne pas.
   final List<Widget> onglets;
 
   const StructureEspace({
@@ -332,6 +333,15 @@ class _BarreBasseMedigo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      // Hauteur MAXIMALE bornée à 56 px. Indispensable : dans le slot
+      // bottomNavigationBar, la barre reçoit une contrainte de hauteur NON
+      // BORNÉE (0 → ∞). Sans borne, le « Center » de chaque onglet (un Align
+      // sans heightFactor) gonfle pour remplir TOUTE la hauteur offerte → la
+      // barre mesure alors toute la hauteur de l'écran et le corps (body)
+      // reçoit 0 px → les tableaux de bord disparaissent (écran blanc).
+      // Bornée ainsi, la barre garde sa taille normale et le corps reçoit la
+      // hauteur restante.
+      constraints: const BoxConstraints(maxHeight: 56),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.trait)),
@@ -354,7 +364,7 @@ class _BarreBasseMedigo extends StatelessWidget {
                         duration: const Duration(milliseconds: 180),
                         curve: Curves.easeOut,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
+                          horizontal: 10,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
@@ -363,17 +373,24 @@ class _BarreBasseMedigo extends StatelessWidget {
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text(
-                          entree.value,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: actif
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: actif
-                                ? AppColors.bleuMedical
-                                : AppColors.texteFaible,
+                        // FittedBox : si le libellé est trop long pour la
+                        // largeur disponible (ex: 5 onglets sur 360 px),
+                        // il RÉTRÉCIT au lieu de déborder ou d'être coupé.
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            entree.value,
+                            maxLines: 1,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: actif
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: actif
+                                  ? AppColors.bleuMedical
+                                  : AppColors.texteFaible,
+                            ),
                           ),
                         ),
                       ),

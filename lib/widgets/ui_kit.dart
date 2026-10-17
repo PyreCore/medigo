@@ -392,6 +392,82 @@ class _ApparitionState extends State<Apparition> {
   }
 }
 
+/// ─────────────────────────────────────────────────────────────────────
+/// DÉGRADÉ SIGNATURE MEDIGO — la carte « Prochain rendez-vous » et la
+/// première tuile de statistiques des deux dashboards. Bleu médical en
+/// haut qui descend vers un bleu-nuit profond : c'est l'identité visuelle
+/// de Medigo sur les écrans de tableau de bord.
+/// ─────────────────────────────────────────────────────────────────────
+const LinearGradient degradeMedigo = LinearGradient(
+  // Haut → bas : le bleu clair est en haut, le bleu nuit en bas.
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xFF4B80FC), Color(0xFF28211A)],
+);
+
+/// Carte au dégradé signature : même géométrie que CarteMedigo (coins
+/// arrondis, ombre douce) mais fond en dégradé et texte BLANC. Utilisée
+/// pour la carte « Prochain rendez-vous » et la première tuile de stats.
+class CarteGradientMedigo extends StatelessWidget {
+  /// Le contenu affiché sur le dégradé (texte blanc).
+  final Widget child;
+
+  /// Espace à l'intérieur de la carte.
+  final EdgeInsetsGeometry padding;
+
+  /// Espace en dehors (marge par rapport aux cartes voisines).
+  final EdgeInsetsGeometry margin;
+
+  /// Si fournie, la carte est cliquable (ex: ouvrir le détail du RDV).
+  final VoidCallback? onTap;
+
+  /// Rayon des coins (24 px pour la carte « Prochain rendez-vous »).
+  final double rayon;
+
+  const CarteGradientMedigo({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+    this.margin = EdgeInsets.zero,
+    this.onTap,
+    this.rayon = 24,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final carte = Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        gradient: degradeMedigo,
+        borderRadius: BorderRadius.circular(rayon),
+        // Lombre reprend la teinte du dégradé pour un rendu cohérent.
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4B80FC).withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+
+    // Non cliquable : on renvoie simplement la carte.
+    if (onTap == null) return carte;
+
+    // Cliquable : curseur « main » + effet d'enfoncement au clic,
+    // exactement comme CarteMedigo.
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: carte,
+      ),
+    );
+  }
+}
+
 /// Carte de statistique (« métrique ») du dashboard : un grand chiffre,
 /// un libellé discret et un fin trait d'accent coloré en haut —
 /// SANS icône (parti pris visuel : interface purement textuelle).
@@ -403,36 +479,59 @@ class TuileStat extends StatelessWidget {
   /// alourdir l'affichage).
   final Color couleur;
 
+  /// true = la tuile est peinte avec le dégradé signature Medigo
+  /// (bleu → nuit) et le texte devient blanc. C'est la PREMIÈRE tuile
+  /// des deux dashboards qui l'utilise, pour attirer l'œil.
+  final bool fondDegrade;
+
   const TuileStat({
     super.key,
     required this.valeur,
     required this.libelle,
     this.couleur = AppColors.bleuMedical,
+    this.fondDegrade = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return CarteMedigo(
+    // Sur dégradé : le texte est blanc (sinon illisible sur le bleu).
+    final couleurValeur = fondDegrade ? Colors.white : AppColors.texte;
+    final couleurLibelle =
+        fondDegrade ? Colors.white.withValues(alpha: 0.85) : AppColors.texteFaible;
+
+    final contenu = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Compteur animé : le chiffre « défile » de 0 jusqu'à sa
+        // valeur au chargement, puis se ré-anime quand il change.
+        _CompteurAnime(valeur: valeur, couleur: couleurValeur),
+        const SizedBox(height: 5),
+        Text(
+          libelle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            color: couleurLibelle,
+          ),
+        ),
+      ],
+    );
+
+    // Version standard : carte blanche du design system.
+    if (!fondDegrade) {
+      return CarteMedigo(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        rayon: Rayons.carte,
+        child: contenu,
+      );
+    }
+
+    // Version dégradé : même disposition, fond signature.
+    return CarteGradientMedigo(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       rayon: Rayons.carte,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Compteur animé : le chiffre « défile » de 0 jusqu'à sa
-          // valeur au chargement, puis se ré-anime quand il change.
-          _CompteurAnime(valeur: valeur),
-          const SizedBox(height: 5),
-          Text(
-            libelle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.texteFaible,
-            ),
-          ),
-        ],
-      ),
+      child: contenu,
     );
   }
 }
@@ -443,15 +542,19 @@ class TuileStat extends StatelessWidget {
 /// elle est affichée telle quelle.
 class _CompteurAnime extends StatelessWidget {
   final String valeur;
-  const _CompteurAnime({required this.valeur});
+
+  /// Couleur du chiffre (blanc sur dégradé, quasi-noir sur carte blanche).
+  final Color couleur;
+
+  const _CompteurAnime({required this.valeur, this.couleur = AppColors.texte});
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(
+    final style = TextStyle(
       fontSize: 26,
       height: 1,
       fontWeight: FontWeight.w800,
-      color: AppColors.texte,
+      color: couleur,
     );
     final cible = int.tryParse(valeur);
     if (cible == null) return Text(valeur, style: style);

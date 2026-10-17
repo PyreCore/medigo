@@ -11,6 +11,7 @@ import 'enregistrement_patient_secretaire.dart';
 import 'liste_rendez_vous_secretaire.dart';
 import 'detail_rendez_vous_secretaire.dart';
 import 'programmer_rendez_vous_secretaire.dart';
+import 'horaires_medecins_secretaire.dart';
 import 'profil_secretaire.dart';
 
 /// Écran principal de l'espace Secrétaire.
@@ -75,7 +76,7 @@ class EspaceSecretaire extends StatefulWidget {
 }
 
 class _EspaceSecretaireState extends State<EspaceSecretaire> {
-  // 0 = Accueil, 1 = Patients, 2 = Rendez-vous, 3 = Profil.
+  // 0 = Accueil, 1 = Patients, 2 = Rendez-vous, 3 = Horaires, 4 = Profil.
   int _ongletActif = 0;
 
   // Photo de profil à jour (voir EspaceMedecin : même mécanisme).
@@ -195,6 +196,9 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
         onTapRendezVous: _ouvrirDetailRdv,
         onNouveauRendezVous: _ouvrirProgrammationRdv,
       ),
+      // Gestion des horaires de TOUS les médecins de l'hôpital
+      // (ajout / modification / validation des créneaux).
+      HorairesMedecinsSecretaire(medecins: widget.medecins),
       ProfilSecretaire(
         secretaire: widget.secretaire,
         photoUrl: _photo,
@@ -213,7 +217,13 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
       photoUser: _photo,
       indexActif: _ongletActif,
       onChoisirOnglet: (index) => setState(() => _ongletActif = index),
-      libelles: const ['Accueil', 'Patients', 'Rendez-vous', 'Profil'],
+      libelles: const [
+        'Accueil',
+        'Patients',
+        'Rendez-vous',
+        'Horaires',
+        'Profil',
+      ],
       onglets: onglets,
     );
   }

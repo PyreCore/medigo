@@ -122,22 +122,30 @@ class AccueilSecretaire extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 // Pastille de date (texte seul — aucune icône).
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(Rayons.pillule),
-                    border: Border.all(color: AppColors.trait),
-                  ),
-                  child: Text(
-                    dateDuJour(),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.texteFaible,
+                // Flexible : sur un très petit écran (360 px) la pastille
+                // se comprime et son texte est coupé (ellipsis) au lieu
+                // d'écraser le nom à gauche et de faire déborder la rangée.
+                // Sur grand écran, elle reprend toute sa largeur.
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(Rayons.pillule),
+                      border: Border.all(color: AppColors.trait),
+                    ),
+                    child: Text(
+                      dateDuJour(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.texteFaible,
+                      ),
                     ),
                   ),
                 ),
@@ -156,6 +164,9 @@ class AccueilSecretaire extends StatelessWidget {
                     valeur: (statistiques['rdvAujourdhui'] ?? 0).toString(),
                     libelle: 'RDV aujourd\'hui',
                     couleur: AppColors.bleuMedical,
+                    // Première tuile en dégradé signature Medigo :
+                    // même visuel que l'accueil médecin, pour l'unité.
+                    fondDegrade: true,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -248,19 +259,86 @@ class AccueilSecretaire extends StatelessWidget {
                     const SizedBox(height: 20),
                     const EnTeteSection(titre: 'Prochain rendez-vous'),
                     const SizedBox(height: 8),
-                    RendezVousCard(
-                      rdv: prochain,
-                      afficherMedecin: true,
+                    // Carte au dégradé signature Medigo : même visuel que
+                    // l'accueil médecin, pour l'unité des deux dashboards.
+                    CarteGradientMedigo(
                       onTap: onTapRendezVous != null
                           ? () => onTapRendezVous!(prochain!)
                           : null,
+                      child: Row(
+                        children: [
+                          // Pastille horaire blanche (lisible sur bleu).
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              prochain.heure,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2F5FD8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          // Patient + médecin, en blanc (la secrétaire
+                          // gère plusieurs médecins : le nom compte).
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  prochain.patientNomComplet,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  (prochain.medecinNom ?? '').trim().isEmpty
+                                      ? 'Consultation'
+                                      : 'Dr ${prochain.medecinNom}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Statut en toutes lettres, blanc sur dégradé.
+                          Text(
+                            libelleStatutRdv(prochain.statut),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ],
               );
 
               // Grand écran : les deux colonnes côte à côte.
-              if (contraintes.maxWidth > 820) {
+              // Seuil identique au rail (900 px) : le panneau latéral
+              // n'apparaît que quand il y a vraiment de la place.
+              if (contraintes.maxWidth >= 900) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

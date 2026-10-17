@@ -42,6 +42,12 @@ class DetailRendezVousSecretaire extends StatelessWidget {
           _ligneInfo('Date', '${rdv.date.day}/${rdv.date.month}/${rdv.date.year}'),
           _ligneInfo('Heure', rdv.heure),
           if (rdv.motif != null) _ligneInfo('Motif', rdv.motif!),
+          // Motif de refus : visible même après coup pour que la
+          // secrétaire sache pourquoi ce RDV a été refusé.
+          if (rdv.statut == StatutRendezVous.refuse &&
+              rdv.motifRefus != null &&
+              rdv.motifRefus!.isNotEmpty)
+            _ligneInfo('Motif du refus', rdv.motifRefus!),
 
           const SizedBox(height: 24),
 

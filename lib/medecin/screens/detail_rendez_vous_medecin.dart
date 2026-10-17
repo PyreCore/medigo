@@ -60,15 +60,22 @@ class DetailRendezVousMedecin extends StatelessWidget {
               children: [
                 // Ligne du haut : nom du patient à gauche, badge de statut à droite.
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      rdv.patientNomComplet,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    // Flexible : un nom de patient très long est coupé
+                    // (ellipsis) au lieu de faire déborder la Row et de
+                    // planter l'écran sur un petit téléphone (360 px).
+                    Flexible(
+                      child: Text(
+                        rdv.patientNomComplet,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -104,6 +111,47 @@ class DetailRendezVousMedecin extends StatelessWidget {
               ],
             ),
           ),
+          // Bandeau « refusé » : si un motif de refus a été enregistré
+          // (par la secrétaire ou par vous), on l'affiche en rouge pour
+          // que la raison du refus soit toujours visible.
+          if (rdv.statut == StatutRendezVous.refuse &&
+              rdv.motifRefus != null &&
+              rdv.motifRefus!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC62828).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFC62828).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Rendez-vous refusé',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFC62828),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    rdv.motifRefus!,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      height: 1.4,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // Les boutons Accepter/Refuser ne s'affichent QUE si le
           // rendez-vous est encore en attente (voir variable "enAttente"
           // calculée plus haut).

@@ -53,8 +53,15 @@ class RendezVous {
   final String? medecinNom;
   final String? hopitalId;
 
+  // Raison du REFUS, choisie par la secrétaire (ou le médecin) au moment
+  // du refus. On la stocke À PART du motif de consultation : "motif" est
+  // ce que le patient veut consulter, "motifRefus" est POURQUOI l'hôpital
+  // a dit non (ex: « Créneau déjà occupé »). Le patient doit comprendre
+  // la décision — c'est une exigence du cahier des charges.
+  final String? motifRefus;
+
   // Constructeur classique : tous les champs sont obligatoires sauf ceux
-  // marqués "?" (motif, medecinId, medecinNom, hopitalId).
+  // marqués "?" (motif, medecinId, medecinNom, hopitalId, motifRefus).
   RendezVous({
     required this.id,
     required this.patientNom,
@@ -66,6 +73,7 @@ class RendezVous {
     this.medecinId,
     this.medecinNom,
     this.hopitalId,
+    this.motifRefus,
   });
 
   // Getter pratique : au lieu d'écrire "${rdv.patientPrenom} ${rdv.patientNom}"
@@ -139,6 +147,11 @@ class RendezVous {
       medecinId: json['medecin_id']?.toString(),
       medecinNom: json['medecin_nom'],
       hopitalId: json['hopital_id']?.toString(),
+
+      // Raison du refus : écrite par la secrétaire (ou le médecin) dans
+      // SecretaireService.refuserRendezVous / MedecinService.refuserRendezVous.
+      // Elle reste null pour tout rendez-vous non refusé.
+      motifRefus: json['motifRefus'],
     );
   }
 }
