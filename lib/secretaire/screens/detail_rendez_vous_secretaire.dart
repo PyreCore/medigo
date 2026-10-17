@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
 import '../../theme/medigo_theme.dart';
-import '../../widgets/rendez_vous_card.dart';
 import '../../widgets/ui_kit.dart';
 import 'refuser_rendez_vous_secretaire.dart';
 
-/// Écran de détail d'un rendez-vous, avec les actions Confirmer/Refuser/Annuler
-/// réservées à la secrétaire (différent des actions du médecin, qui
-/// "accepte" ou "refuse" une consultation).
+/// Écran de détail d'un rendez-vous (secrétaire), avec les actions
+/// Confirmer / Annuler / Refuser.
+/// Reproduit la maquette du détail : en-tête (retour + titre + badge),
+/// carte en dégradé (avatar, nom, médecin, Date/Heure/Motif), bandeau de
+/// refus, pied de boutons fixe.
 class DetailRendezVousSecretaire extends StatelessWidget {
   final RendezVous rdv;
   final VoidCallback onConfirmer;
   final VoidCallback onAnnuler;
-  // Refus avec motif : la secrétaire choisit une raison parmi une liste
-  // prédéfinie (ou saisit un motif libre) avant de confirmer le refus.
+  // Refus avec motif : la secrétaire choisit une raison avant de confirmer.
   final Future<void> Function(RendezVous rdv, {String? motif}) onRefuser;
 
   const DetailRendezVousSecretaire({
@@ -24,66 +24,152 @@ class DetailRendezVousSecretaire extends StatelessWidget {
     required this.onRefuser,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Détail du rendez-vous')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+  // Carte dégradée : avatar + nom + médecin, puis Date / Heure / Motif.
+  Widget _carteInfo(String dateLongue) {
+    final medecin = (rdv.medecinNom ?? '').trim();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: degradeDetail,
+        borderRadius: BorderRadius.circular(Rayons.carte),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // On réutilise la carte déjà utilisée ailleurs, non cliquable
-          // ici (pas de onTap) puisqu'on est déjà sur son écran de détail.
-          RendezVousCard(rdv: rdv, afficherMedecin: true),
-          const SizedBox(height: 20),
-
-          _ligneInfo('Patient', rdv.patientNomComplet),
-          // "??" affiche 'Non renseigné' si medecinNom est null.
-          _ligneInfo('Médecin', rdv.medecinNom ?? 'Non renseigné'),
-          _ligneInfo('Date', '${rdv.date.day}/${rdv.date.month}/${rdv.date.year}'),
-          _ligneInfo('Heure', rdv.heure),
-          if (rdv.motif != null) _ligneInfo('Motif', rdv.motif!),
-          // Motif de refus : visible même après coup pour que la
-          // secrétaire sache pourquoi ce RDV a été refusé.
-          if (rdv.statut == StatutRendezVous.refuse &&
-              rdv.motifRefus != null &&
-              rdv.motifRefus!.isNotEmpty)
-            _ligneInfo('Motif du refus', rdv.motifRefus!),
-
-          const SizedBox(height: 24),
-
-          // On ne propose les actions que si le rendez-vous est
-          // encore "en_attente" : inutile de confirmer un RDV déjà
-          // confirmé, ou d'annuler/refuser un RDV déjà traité.
-          if (rdv.statut == StatutRendezVous.enAttente) ...[
-            // Ligne 1 : Annuler (rouge) + Confirmer (vert).
-            Row(
-              children: [
-                Expanded(
-                  child: BoutonContour(
-                    texte: 'Annuler',
-                    couleur: AppColors.rouge,
-                    onPressed: onAnnuler,
+          Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  initiales(rdv.patientPrenom, rdv.patientNom),
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.bleuVif,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: BoutonPrincipal(
-                    texte: 'Confirmer',
-                    couleur: AppColors.vertSante,
-                    onPressed: onConfirmer,
-                  ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      rdv.patientNomComplet,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      medecin.isNotEmpty ? medecin : 'Consultation de suivi',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.texteFaible,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _LigneDetail(libelle: 'Date', valeur: dateLongue, separateur: true),
+          _LigneDetail(libelle: 'Heure', valeur: rdv.heure, separateur: true),
+          if (rdv.motif != null && rdv.motif!.isNotEmpty)
+            _LigneDetail(libelle: 'Motif', valeur: rdv.motif!, separateur: true),
+        ],
+      ),
+    );
+  }
+
+  // Bandeau « refusé » : la raison du refus reste toujours visible.
+  Widget _bandeauRefus() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.roseClair,
+        borderRadius: BorderRadius.circular(Rayons.carte),
+        border: Border.all(color: AppColors.rougeBadge.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rendez-vous refusé',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.rougeBadge,
             ),
-            const SizedBox(height: 10),
-            // Ligne 2 : Refuser (rouge, pleine largeur).
-            BoutonContour(
-              texte: 'Refuser',
-              couleur: AppColors.rouge,
-              pleineLargeur: true,
-              onPressed: () => _ouvrirRefus(context),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            rdv.motifRefus!,
+            style: const TextStyle(
+              fontSize: 13.5,
+              height: 1.4,
+              color: AppColors.texte,
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Pied fixe : Annuler + Confirmer, puis Refuser en pleine largeur.
+  Widget _piedActions(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.trait)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: BoutonContour(
+                  texte: 'Annuler',
+                  couleur: AppColors.rouge,
+                  hauteur: 52,
+                  onPressed: onAnnuler,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: BoutonPrincipal(
+                  texte: 'Confirmer',
+                  couleur: AppColors.vertSante,
+                  hauteur: 52,
+                  onPressed: onConfirmer,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          BoutonContour(
+            texte: 'Refuser',
+            couleur: AppColors.rouge,
+            pleineLargeur: true,
+            hauteur: 52,
+            onPressed: () => _ouvrirRefus(context),
+          ),
         ],
       ),
     );
@@ -97,10 +183,7 @@ class DetailRendezVousSecretaire extends StatelessWidget {
         builder: (_) => RefuserRendezVousSecretaire(
           rdvId: rdv.id,
           onRefuser: (rdvId, {motif}) async {
-            // Ferme l'écran de détail AVANT l'appel au service.
-            // L'écran de refus se ferme de son côté (Navigator.pop
-            // dans _confirmerRefus). Comme ça, pas de double-pop
-            // qui figerait l'interface.
+            // Ferme le détail AVANT l'appel au service (pas de double-pop).
             if (context.mounted) Navigator.pop(context);
             await onRefuser(rdv, motif: motif);
           },
@@ -109,28 +192,119 @@ class DetailRendezVousSecretaire extends StatelessWidget {
     );
   }
 
-  // Petite ligne "label : valeur" réutilisée pour chaque info du RDV.
-  Widget _ligneInfo(String label, String valeur) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.black54, fontSize: 13),
+  @override
+  Widget build(BuildContext context) {
+    final enAttente = rdv.statut == StatutRendezVous.enAttente;
+    final dateLongue = '${dateDuJour(rdv.date)} ${rdv.date.year}';
+
+    return Scaffold(
+      backgroundColor: AppColors.fond,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── En-tête : retour + titre + badge statut ──────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.chevron_left,
+                      size: 28,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Expanded(
+                    child: Text(
+                      'Détail du rendez-vous',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ),
+                  PastilleStatut(statut: rdv.statut),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              valeur,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+
+            // ── Contenu défilant ──────────────────────────────────────
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                children: [
+                  _carteInfo(dateLongue),
+                  if (rdv.statut == StatutRendezVous.refuse &&
+                      rdv.motifRefus != null &&
+                      rdv.motifRefus!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _bandeauRefus(),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
+
+            // ── Pied d'actions (seulement si en attente) ──────────────
+            if (enAttente) _piedActions(context),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+// Ligne « libellé …… valeur » de la carte dégradée, précédée d'un filet.
+class _LigneDetail extends StatelessWidget {
+  final String libelle;
+  final String valeur;
+  final bool separateur;
+
+  const _LigneDetail({
+    required this.libelle,
+    required this.valeur,
+    this.separateur = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (separateur)
+          Container(height: 1, color: AppColors.navy.withValues(alpha: 0.08)),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                libelle,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.texteFaible,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  valeur,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

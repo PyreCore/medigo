@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────
 // ACCUEIL MÉDECIN — tableau de bord « RDV du jour ».
-// Structure professionnelle (type Doctolib Pro / dashboards internationaux) :
-//  1. en-tête : identité + date du jour (texte seul, aucune icône) ;
-//  2. rangée de métriques (chiffres + trait d'accent coloré) ;
-//  3. actions rapides (boutons texte) ;
-//  4. grille responsive : liste des RDV (gauche) + panneau latéral
-//     « répartition » et « prochain rendez-vous » (droite, ≥ 820 px).
+// Reproduit la maquette « Medigo Médecin et Secrétaire » :
+//  1. en-tête : date au-dessus, salutation en grand, avatar à droite ;
+//  2. carte « Prochain rendez-vous » en dégradé signature (bleu → nuit) ;
+//  3. rangée de 3 métriques à icône pastel ;
+//  4. liste des RDV du jour + lien « Voir tout » ;
+//  5. ≥ 900 px : panneau latéral « Répartition du jour » à droite.
 // La LOGIQUE (données + callbacks reçus du parent) est inchangée.
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
@@ -27,8 +27,8 @@ class AccueilMedecin extends StatelessWidget {
 
   // Callbacks : ce widget n'a jamais accès à la navigation directement,
   // il appelle ces fonctions et laisse l'espace parent décider.
-  final VoidCallback onVoirTout; // onglet « Rendez-vous »
-  final VoidCallback onVoirPlanning; // onglet « Disponibilités »
+  final VoidCallback onVoirTout; // lien « Voir tout » → onglet Rendez-vous
+  final VoidCallback onVoirPlanning; // (onglet Disponibilités, via nav)
   final ValueChanged<RendezVous> onTapRendezVous;
   final Future<void> Function()? onRafraichir;
 
@@ -45,17 +45,100 @@ class AccueilMedecin extends StatelessWidget {
     this.onRafraichir,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    // Sous-titre de l'en-tête : « Spécialité · Hôpital », tolérant aux
-    // champs vides (comptes créés sans ces informations dans Firestore).
+  /// Carte « Prochain rendez-vous » (dégradé signature), en haut du
+  /// tableau de bord comme dans la maquette. Extraite dans une méthode
+  /// pour rester lisible.
+  Widget _carteProchain(RendezVous prochain) {
+    // Sous-titre : motif · spécialité (chacun toléré vide).
+    final motif = (prochain.motif ?? '').trim();
+    final specialite = medecin.specialite.trim();
     final sousTitre = [
-      if (medecin.specialite.trim().isNotEmpty) medecin.specialite,
-      if (medecin.hopitalNom.trim().isNotEmpty) medecin.hopitalNom,
+      if (motif.isNotEmpty) motif else 'Consultation',
+      if (specialite.isNotEmpty) specialite,
     ].join(' · ');
 
-    // Prochain rendez-vous « à venir » (en attente ou confirmé) pour
-    // le panneau latéral. Boucle classique (pas de dépendance collection).
+    return CarteGradientMedigo(
+      onTap: () => onTapRendezVous(prochain),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Ligne de haut : libellé + pastille horaire blanche.
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Prochain rendez-vous',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(Rayons.pillule),
+                ),
+                child: Text(
+                  prochain.heure,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Nom du patient, en grand blanc.
+          Text(
+            prochain.patientNomComplet,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            sousTitre,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, color: Colors.white70),
+          ),
+          const SizedBox(height: 14),
+          // Lien « Voir le détail » + chevron.
+          Row(
+            children: const [
+              Text(
+                'Voir le détail',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 18, color: Colors.white),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Prochain rendez-vous « à venir » (en attente ou confirmé).
     RendezVous? prochain;
     for (final rdv in rendezVousDuJour) {
       if (rdv.statut == StatutRendezVous.enAttente ||
@@ -65,21 +148,85 @@ class AccueilMedecin extends StatelessWidget {
       }
     }
 
+    // Liste des rendez-vous du jour (cartes maquette : pastille d'heure +
+    // nom + motif + badge de statut).
+    final listeRdv = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        EnTeteSection(
+          titre: 'Rendez-vous d\'aujourd\'hui',
+          action: 'Voir tout',
+          onAction: onVoirTout,
+        ),
+        const SizedBox(height: 8),
+        if (rendezVousDuJour.isEmpty)
+          const EtatVide(
+            message: 'Aucun rendez-vous aujourd\'hui',
+            detail: 'Profitez-en pour préparer vos consultations.',
+          )
+        else
+          ...rendezVousDuJour.asMap().entries.map(
+            (entree) => Apparition(
+              delaiMs: 160 + (entree.key * 60),
+              child: CarteRdvTableau(
+                rdv: entree.value,
+                onTap: () => onTapRendezVous(entree.value),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    // Panneau latéral (≥ 900 px) : répartition du jour par statut.
+    final panneau = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const EnTeteSection(titre: 'Répartition du jour'),
+        const SizedBox(height: 8),
+        RepartitionStatuts(rdvs: rendezVousDuJour),
+      ],
+    );
+
     return RefreshIndicator(
       onRefresh: onRafraichir ?? () async {},
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          // ── 1. En-tête : avatar + salutation + date ───────────────
+          // ── 1. En-tête : date au-dessus, salutation, avatar à droite ──
           Apparition(
             delaiMs: 0,
             child: Row(
               children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dateDuJour(),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.texteFaible,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Bonjour, ${medecin.nomComplet}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.navy,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Avatar à droite (photo base64 ou initiales).
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: AppColors.bleuMedical.withValues(
-                    alpha: 0.10,
-                  ),
+                  backgroundColor: AppColors.bleuClair,
                   backgroundImage: imageProfil(photoUrl),
                   child: photoUrl == null
                       ? Text(
@@ -87,66 +234,54 @@ class AccueilMedecin extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.bleuMedical,
+                            color: AppColors.bleuVif,
                           ),
                         )
                       : null,
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── 2. Carte « Prochain rendez-vous » (dégradé) ───────────
+          if (prochain != null) ...[
+            Apparition(delaiMs: 60, child: _carteProchain(prochain)),
+            const SizedBox(height: 16),
+          ],
+
+          // ── 3. Métriques du jour (icônes pastel) ─────────────────
+          Apparition(
+            delaiMs: 120,
+            child: Row(
+              children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bonjour, ${medecin.nomComplet}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.texte,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        sousTitre.isEmpty ? 'Compte médecin' : sousTitre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.texteFaible,
-                        ),
-                      ),
-                    ],
+                  child: TuileStatIcone(
+                    icone: Icons.calendar_month_outlined,
+                    couleur: AppColors.bleuVif,
+                    fondPastel: AppColors.bleuClair,
+                    valeur: rendezVousDuJour.length.toString(),
+                    libelle: 'RDV aujourd\'hui',
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Pastille de date (texte seul — aucune icône).
-                // Flexible : sur un très petit écran (360 px) la pastille
-                // se comprime et son texte est coupé (ellipsis) au lieu
-                // d'écraser le nom à gauche et de faire déborder la rangée.
-                // Sur grand écran, elle reprend toute sa largeur.
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(Rayons.pillule),
-                      border: Border.all(color: AppColors.trait),
-                    ),
-                    child: Text(
-                      dateDuJour(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.texteFaible,
-                      ),
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TuileStatIcone(
+                    icone: Icons.schedule,
+                    couleur: AppColors.ambre,
+                    fondPastel: AppColors.ambreClair,
+                    valeur: enAttente.toString(),
+                    libelle: 'En attente',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TuileStatIcone(
+                    icone: Icons.people_alt_outlined,
+                    couleur: AppColors.vertSante,
+                    fondPastel: AppColors.vertClair,
+                    valeur: patientsSuivis.toString(),
+                    libelle: 'Patients suivis',
                   ),
                 ),
               ],
@@ -154,196 +289,22 @@ class AccueilMedecin extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── 2. Métriques du jour ─────────────────────────────────
-          Apparition(
-            delaiMs: 60,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TuileStat(
-                    valeur: rendezVousDuJour.length.toString(),
-                    libelle: 'Rendez-vous du jour',
-                    couleur: AppColors.bleuMedical,
-                    // Première tuile en dégradé signature Medigo :
-                    // elle attire l'œil et identifie l'espace médecin.
-                    fondDegrade: true,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TuileStat(
-                    valeur: enAttente.toString(),
-                    libelle: 'En attente',
-                    couleur: AppColors.ambre,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TuileStat(
-                    valeur: patientsSuivis.toString(),
-                    libelle: 'Patients suivis',
-                    couleur: AppColors.turquoise,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── 3. Actions rapides (texte seul) ──────────────────────
-          Apparition(
-            delaiMs: 120,
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                BoutonPrincipal(
-                  texte: 'Voir le planning',
-                  pleineLargeur: false,
-                  hauteur: 44,
-                  onPressed: onVoirPlanning,
-                ),
-                BoutonContour(
-                  texte: 'Tous les rendez-vous',
-                  onPressed: onVoirTout,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── 4. Grille responsive : liste + panneau latéral ───────
+          // ── 4. Liste + panneau responsive ─────────────────────────
           LayoutBuilder(
             builder: (context, contraintes) {
-              // Colonne gauche : la liste des rendez-vous du jour.
-              final liste = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const EnTeteSection(titre: 'Rendez-vous d\'aujourd\'hui'),
-                  const SizedBox(height: 8),
-                  if (rendezVousDuJour.isEmpty)
-                    const EtatVide(
-                      message: 'Aucun rendez-vous aujourd\'hui',
-                      detail: 'Profitez-en pour préparer vos consultations.',
-                    )
-                  else
-                    // Apparition décalée : 60 ms entre chaque carte.
-                    ...rendezVousDuJour.asMap().entries.map(
-                      (entree) => Apparition(
-                        delaiMs: 160 + (entree.key * 60),
-                        child: RendezVousCard(
-                          rdv: entree.value,
-                          onTap: () => onTapRendezVous(entree.value),
-                        ),
-                      ),
-                    ),
-                ],
-              );
-
-              // Colonne droite : panneau d'analyse du jour.
-              final panneau = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const EnTeteSection(titre: 'Répartition du jour'),
-                  const SizedBox(height: 8),
-                  RepartitionStatuts(rdvs: rendezVousDuJour),
-                  if (prochain != null) ...[
-                    const SizedBox(height: 20),
-                    const EnTeteSection(titre: 'Prochain rendez-vous'),
-                    const SizedBox(height: 8),
-                    // Carte au dégradé signature Medigo : le prochain
-                    // rendez-vous est l'information la plus importante du
-                    // dashboard, on lui donne le visuel le plus fort.
-                    CarteGradientMedigo(
-                      onTap: () => onTapRendezVous(prochain!),
-                      child: Row(
-                        children: [
-                          // Pastille horaire blanche (lisible sur bleu).
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              prochain.heure,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2F5FD8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          // Nom du patient + motif, en blanc.
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  prochain.patientNomComplet,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  (prochain.motif ?? '').trim().isEmpty
-                                      ? 'Consultation'
-                                      : prochain.motif!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.white.withValues(alpha: 0.85),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Statut en toutes lettres, blanc sur dégradé.
-                          Text(
-                            libelleStatutRdv(prochain.statut),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              );
-
-              // Grand écran : les deux colonnes côte à côte.
-              // Seuil identique au rail (900 px) : le panneau latéral
-              // n'apparaît que quand il y a vraiment de la place.
+              // Grand écran : liste + panneau côte à côte (seuil = rail).
               if (contraintes.maxWidth >= 900) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 7, child: liste),
+                    Expanded(flex: 7, child: listeRdv),
                     const SizedBox(width: 24),
                     Expanded(flex: 3, child: panneau),
                   ],
                 );
               }
-              // Petit écran : empilées.
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [liste, const SizedBox(height: 28), panneau],
-              );
+              // Petit écran : liste seule (le prochain RDV est déjà en haut).
+              return listeRdv;
             },
           ),
         ],

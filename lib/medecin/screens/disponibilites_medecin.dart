@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import '../../models/medecin.dart';
 import '../../models/disponibilite.dart';
 import '../../services/disponibilite_service.dart';
+import '../../theme/medigo_theme.dart';
+import '../../widgets/ui_kit.dart';
 
-/// Onglet "Disponibilités" : le médecin déclare ses plages horaires, et ces
-/// plages become les créneaux que les patients peuvent réserver.
+/// Onglet "Disponibilités" : le médecin CONSULTE ses plages horaires.
 ///
-/// Écriture dans Firestore (collection "disponibilites", voir
-/// models/disponibilite.dart). Chaque modification est enregistrée
-/// immédiatement : un médecin qui coupe l'application après avoir retiré un
-/// créneau ne doit pas perdre sa saisie.
+/// Mode LECTURE SEULE : la gestion des horaires appartient à la secrétaire
+/// de l'hôpital (voir horaires_medecins_secretaire.dart pour l'édition).
+/// Reproduit la maquette : titre, bandeau « Lecture seule », une carte
+/// regroupant les 7 jours (séparés par des filets, pastilles d'heure ou
+/// « Indisponible »), puis la durée d'une consultation.
 ///
-/// Le médecin peut déclarer PLUSIEURS plages pour un même jour (matin et
-/// après-midi) : ce sont des documents distincts, pas un début et une fin
-/// dans un seul. Un intervalle unique ne permettrait pas de modéliser une pause
-/// déjeuner, qui est précisément le cas le plus fréquent.
+/// Écriture dans Firestore (collection "disponibilites") : chaque plage
+/// est un document distinct (matin et après-midi séparés).
 class DisponibilitesMedecin extends StatefulWidget {
   final Medecin medecin;
 
@@ -80,173 +80,183 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Bandeau informatif : la gestion des horaires est réservée
-        // à la secrétaire de l'hôpital. Le médecin ne fait que consulter.
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Text(
-            'Vos horaires sont gérés par la secrétaire de l\'hôpital. '
-            'Pour toute modification, contactez-la directement.',
-            style: TextStyle(fontSize: 12, color: Colors.black87),
-          ),
+        // ── Titre + sous-titre (maquette) ─────────────────────────
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Mes disponibilités',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Vos horaires de consultation',
+              style: TextStyle(fontSize: 14, color: AppColors.texteFaible),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        for (int jour = 1; jour <= 7; jour++)
-          _CarteJour(
-            jour: jour,
-            toutesLesPlages: _disponibilites.where((d) => d.jour == jour).toList(),
-            onAjouter: null, // désactivé : la secrétaire gère les horaires
-            onModifier: null,
-            onSupprimer: null,
-            onBasculer: null,
+
+        // ── Bandeau « Lecture seule » (maquette) ─────────────────
+        const BandeauInfo(
+          icone: Icons.lock_outline,
+          titre: 'Lecture seule',
+          corps:
+              'Vos horaires sont gérés par la secrétaire de l\'hôpital. '
+              'Pour toute modification, contactez-la directement.',
+        ),
+        const SizedBox(height: 16),
+
+        // ── Carte des 7 jours (séparés par des filets) ──────────
+        CarteMedigo(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          rayon: Rayons.carte,
+          child: Column(
+            children: [
+              for (int jour = 1; jour <= 7; jour++) ...[
+                // Filet de séparation entre les jours (pas au-dessus du 1er).
+                if (jour > 1)
+                  Container(height: 1, color: AppColors.trait),
+                _LigneJour(
+                  jour: jour,
+                  // On n'affiche QUE les plages actives : une plage inactive
+                  // n'est pas réservable, donc le jour devient « Indisponible ».
+                  plages: _disponibilites
+                      .where((d) => d.jour == jour && d.actif)
+                      .toList(),
+                ),
+              ],
+            ],
           ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Durée d'une consultation (maquette) ──────────────────
+        CarteMedigo(
+          padding: const EdgeInsets.all(16),
+          rayon: Rayons.carte,
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Durée d\'une consultation',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+              const Text(
+                '30 min',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.bleuVif,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
-/// Carte d'un jour : la liste de ses plages, avec les actions sur chacune.
-/// Les callbacks sont optionnels : si null, l'action correspondante n'est
-/// pas affichée (mode lecture seule).
-class _CarteJour extends StatelessWidget {
+/// Une ligne de jour : le nom à gauche, puis à droite les plages actives
+/// (pastilles « début à fin ») ou « Indisponible » si le jour n'a aucune
+/// plage active.
+class _LigneJour extends StatelessWidget {
   final int jour;
-  final List<Disponibilite> toutesLesPlages; // actives ET inactives
-  final VoidCallback? onAjouter;
-  final Future<void> Function(Disponibilite)? onModifier;
-  final Future<void> Function(Disponibilite)? onSupprimer;
-  final Future<void> Function(Disponibilite)? onBasculer;
+  final List<Disponibilite> plages; // plages ACTIVES uniquement
 
-  const _CarteJour({
-    required this.jour,
-    required this.toutesLesPlages,
-    this.onAjouter,
-    this.onModifier,
-    this.onSupprimer,
-    this.onBasculer,
-  });
+  const _LigneJour({required this.jour, required this.plages});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Colors.black.withValues(alpha: 0.06)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    Disponibilite.nomJour(jour),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                // Bouton "Ajouter" visible uniquement si onAjouter est fourni.
-                if (onAjouter != null)
-                  TextButton.icon(
-                    onPressed: onAjouter,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Ajouter'),
-                  ),
-              ],
-            ),
-            if (toutesLesPlages.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'Aucune plage déclarée',
-                  style: TextStyle(fontSize: 13, color: Colors.black45),
-                ),
-              )
-            else
-              ...toutesLesPlages.map(
-                (plage) => _LignePlage(
-                  plage: plage,
-                  onModifier: onModifier,
-                  onSupprimer: onSupprimer,
-                  onBasculer: onBasculer,
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // Nom du jour, à gauche.
+          Expanded(
+            child: Text(
+              Disponibilite.nomJour(jour),
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.navy,
               ),
-          ],
-        ),
+            ),
+          ),
+          // À droite : les plages, ou « Indisponible ».
+          if (plages.isEmpty)
+            const Text(
+              'Indisponible',
+              style: TextStyle(fontSize: 13.5, color: AppColors.texteFaible),
+            )
+          else
+            Flexible(
+              // Wrap : si plusieurs plages tiennent mal sur un écran étroit,
+              // elles passent à la ligne au lieu de déborder.
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.end,
+                children: plages
+                    .map(
+                      (p) => Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _PastilleHeure(heure: p.heureDebut),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 2),
+                            child: Text(
+                              'à',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.texteFaible,
+                              ),
+                            ),
+                          ),
+                          _PastilleHeure(heure: p.heureFin),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-/// Une plage horaire, avec ses trois actions.
-/// Les callbacks sont optionnels : si null, le bouton correspondant
-/// n'est pas affiché (mode lecture seule).
-class _LignePlage extends StatelessWidget {
-  final Disponibilite plage;
-  final Future<void> Function(Disponibilite)? onModifier;
-  final Future<void> Function(Disponibilite)? onSupprimer;
-  final Future<void> Function(Disponibilite)? onBasculer;
+/// Pastille d'heure des disponibilités : fond bleu clair, heure navy gras.
+class _PastilleHeure extends StatelessWidget {
+  final String heure;
 
-  const _LignePlage({
-    required this.plage,
-    this.onModifier,
-    this.onSupprimer,
-    this.onBasculer,
-  });
+  const _PastilleHeure({required this.heure});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          // Pas d'icône (parti pris Medigo, texte seul) : la plage
-          // inactive est simplement grisée et barrée. maxLines/ellipsis
-          // : sur un écran étroit (360 px), l'heure est coupée proprement
-          // au lieu de passer sur plusieurs lignes.
-          Expanded(
-            child: Text(
-              plage.libelle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                color: plage.actif ? Colors.black87 : Colors.black38,
-                decoration: plage.actif ? null : TextDecoration.lineThrough,
-              ),
-            ),
-          ),
-        // Interrupteur visible uniquement si onBasculer est fourni.
-          if (onBasculer != null)
-            Switch(
-              value: plage.actif,
-              activeThumbColor: const Color(0xFF2E6F6E),
-              onChanged: (_) => onBasculer!(plage),
-            ),
-          // Bouton "Modifier" visible uniquement si onModifier est fourni.
-          if (onModifier != null)
-            IconButton(
-              tooltip: 'Modifier',
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              onPressed: () => onModifier!(plage),
-            ),
-          // Bouton "Supprimer" visible uniquement si onSupprimer est fourni.
-          if (onSupprimer != null)
-            IconButton(
-              tooltip: 'Supprimer',
-              icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-              onPressed: () => onSupprimer!(plage),
-            ),
-        ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.bleuClair,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        heure,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.navy,
+        ),
       ),
     );
   }

@@ -51,6 +51,33 @@ class AppColors {
 
   /// Traits / contour des cartes et champs : gris-bleu très clair.
   static const trait = Color(0xFFE4EAF3);
+
+  // ───────────────────────────────────────────────────────────────────
+  // JETONS DE LA MAQUETTE « Medigo Médecin et Secrétaire » (ajoutés,
+  // sans remplacer les constantes ci-dessus pour ne pas déteindre sur
+  // l'espace Patient / Admin qui réutilise bleuMedical, texte, etc.).
+  // ───────────────────────────────────────────────────────────────────
+
+  /// Bleu vif « maquette » (periwinkle) : liens (« Voir tout »),
+  /// initiales d'avatar, texte des pastilles d'heure, « 30 min ».
+  static const bleuVif = Color(0xFF3B5BFD);
+
+  /// Navy quasi-noir des titres de la maquette (identique au texte
+  /// principal, redéclaré pour nommer clairement son usage).
+  static const navy = Color(0xFF0F172A);
+
+  // Fonds pastel (pastilles d'icônes, badges de statut, pastilles d'heure).
+  static const bleuClair = Color(0xFFDBE7FE);
+  static const ambreClair = Color(0xFFFDF0D5);
+  static const vertClair = Color(0xFFDFF5E8);
+  static const roseClair = Color(0xFFFCE7EB);
+  static const grisClair = Color(0xFFE9EAF2);
+
+  // Texte des badges de statut (associé au fond pastel correspondant).
+  static const vertBadge = Color(0xFF0E9F6E); // Confirmé
+  static const ambreBadge = Color(0xFFB45309); // En attente
+  static const rougeBadge = Color(0xFFE11D48); // Refusé
+  static const grisBadge = Color(0xFF64748B); // Terminé
 }
 
 /// Formes (rayons des coins arrondis) standardisées.

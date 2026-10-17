@@ -3,15 +3,37 @@
 //
 // Deux dispositions selon la largeur d'écran (responsive) :
 //  · web / tablette large (≥ 900 px) : RAIL de navigation à gauche
-//    (libellés seuls — aucune icône), en-tête de page intégré, contenu
-//    centré avec largeur maximale : c'est le schéma des applications
-//    professionnelles internationales (Doctolib Pro, Linear, Notion).
-//  · mobile (< 900 px) : barre du haut compacte + barre du bas à
-//    libellés seuls avec pastille d'indication.
+//    (icône + libellé), en-tête de page intégré, contenu centré avec
+//    largeur maximale : c'est le schéma des applications professionnelles
+//    internationales (Doctolib Pro, Linear, Notion).
+//  · mobile (< 900 px) : barre du haut compacte + barre du bas en
+//    dégradé signature, avec icône + libellé et pilule active (maquette).
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../theme/medigo_theme.dart';
 import 'ui_kit.dart';
+
+/// Icône Material associée à chaque onglet (d'après la maquette).
+/// Le libellé sert de clé : on reconnaît « Accueil », « Rendez-vous »…
+/// Sinon, une icône neutre par défaut évite tout crash.
+IconData _iconePourLibelle(String libelle) {
+  switch (libelle) {
+    case 'Accueil':
+      return Icons.home_outlined;
+    case 'Rendez-vous':
+      return Icons.calendar_month_outlined;
+    case 'Disponibilités':
+      return Icons.schedule;
+    case 'Patients':
+      return Icons.people_alt_outlined;
+    case 'Horaires':
+      return Icons.access_time_outlined;
+    case 'Profil':
+      return Icons.person_outline;
+    default:
+      return Icons.circle_outlined;
+  }
+}
 
 class StructureEspace extends StatelessWidget {
   /// « Espace Médecin » / « Espace Secrétaire » (sous-titre du rail).
@@ -302,6 +324,8 @@ class _ItemRail extends StatelessWidget {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
+          // Libellé seul (le rail reste « texte seul » — les icônes de la
+          // maquette vivent dans la barre du bas mobile, pas dans ce rail).
           child: Text(
             libelle,
             style: TextStyle(
@@ -333,68 +357,70 @@ class _BarreBasseMedigo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Hauteur MAXIMALE bornée à 56 px. Indispensable : dans le slot
-      // bottomNavigationBar, la barre reçoit une contrainte de hauteur NON
-      // BORNÉE (0 → ∞). Sans borne, le « Center » de chaque onglet (un Align
-      // sans heightFactor) gonfle pour remplir TOUTE la hauteur offerte → la
-      // barre mesure alors toute la hauteur de l'écran et le corps (body)
-      // reçoit 0 px → les tableaux de bord disparaissent (écran blanc).
-      // Bornée ainsi, la barre garde sa taille normale et le corps reçoit la
-      // hauteur restante.
-      constraints: const BoxConstraints(maxHeight: 56),
+      // Hauteur MAXIMALE bornée : CORRECTIF DU BUG BLANC (à conserver).
+      // Dans le slot bottomNavigationBar, la hauteur est NON BORNÉE
+      // (0 → ∞). Sans borne, un « Center » (Align sans heightFactor) ou un
+      // Column en mainAxisSize.max gonfle à TOUTE la hauteur offerte → la
+      // barre mesure alors la hauteur de l'écran et le corps reçoit 0 px
+      // (écran blanc). La borne garantit une taille normale. Elle est
+      // assez haute (96) pour laisser passer la zone sûre des iPhone
+      // (indicateur d'accueil) SANS tronquer, et reste un plafond de sécurité.
+      constraints: const BoxConstraints(maxHeight: 96),
+      // Fond en dégradé signature (bleu → nuit, horizontal), comme la maquette.
       decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.trait)),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFF3B5BFD), Color(0xFF0B0A1A)],
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: Row(
             children: libelles.asMap().entries.map((entree) {
               final actif = entree.key == indexActif;
               return Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(14),
                   onTap: () => onChoisirOnglet(entree.key),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Center(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOut,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
+                  // mainAxisSize.min : le Column se dimensionne à son
+                  // contenu (icône + libellé) et ne gonfle jamais.
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Pastille de l'icône : blanche quand actif.
+                      Container(
+                        padding: const EdgeInsets.all(5),
                         decoration: BoxDecoration(
-                          color: actif
-                              ? AppColors.bleuMedical.withValues(alpha: 0.10)
-                              : Colors.transparent,
+                          color: actif ? Colors.white : Colors.transparent,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        // FittedBox : si le libellé est trop long pour la
-                        // largeur disponible (ex: 5 onglets sur 360 px),
-                        // il RÉTRÉCIT au lieu de déborder ou d'être coupé.
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            entree.value,
-                            maxLines: 1,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: actif
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: actif
-                                  ? AppColors.bleuMedical
-                                  : AppColors.texteFaible,
-                            ),
+                        child: Icon(
+                          _iconePourLibelle(entree.value),
+                          size: 20,
+                          color: actif ? AppColors.bleuVif : Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      // Libellé sous l'icône. FittedBox : il RÉTRÉCIT si la
+                      // largeur manque (ex : 5 onglets sur 360 px).
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          entree.value,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight:
+                                actif ? FontWeight.w700 : FontWeight.w500,
+                            color: actif ? Colors.white : Colors.white70,
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               );

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
 import '../../theme/medigo_theme.dart';
 import '../../widgets/rendez_vous_card.dart';
+import '../../widgets/ui_kit.dart';
 
-/// Onglet "Rendez-vous" : liste complète des rendez-vous de l'hôpital
-/// (tous médecins confondus), filtrable par statut, avec un bouton "+"
-/// pour en programmer un nouveau.
-// StatefulWidget car ce widget doit se souvenir du filtre actuellement
-// sélectionné (ex: "En attente") entre chaque interaction.
+/// Onglet "Rendez-vous" (secrétaire) : liste de TOUS les rendez-vous de
+/// l'hôpital (tous médecins), filtrable par statut, avec un bouton
+/// flottant pour en programmer un nouveau.
+/// Reproduit la maquette : titre + sous-titre, pilules de filtre, cartes
+/// à avatar affichant le médecin.
+// StatefulWidget car il doit se souvenir du filtre sélectionné.
 class ListeRendezVousSecretaire extends StatefulWidget {
   final List<RendezVous> rendezVous;
   final void Function(RendezVous)? onTapRendezVous;
@@ -27,14 +29,32 @@ class ListeRendezVousSecretaire extends StatefulWidget {
 
 class _ListeRendezVousSecretaireState
     extends State<ListeRendezVousSecretaire> {
-  // "null" veut dire "aucun filtre actif" : on affiche tout.
+  // "null" = aucun filtre actif : on affiche tout.
   StatutRendezVous? _filtreActif;
+
+  // Ordre des chips (comme l'accueil/liste médecin) : les plus courants
+  // d'abord, les autres défilent horizontalement.
+  static const List<StatutRendezVous> _ordreFiltres = [
+    StatutRendezVous.enAttente,
+    StatutRendezVous.confirme,
+    StatutRendezVous.termine,
+    StatutRendezVous.refuse,
+    StatutRendezVous.annule,
+  ];
+
+  // Ligne d'information d'une carte : « Dr X · motif » (le secrétaire a
+  // besoin de voir LE MÉDECIN, tous confondus).
+  static String _ligneMedecin(RendezVous rdv) {
+    final medecin = (rdv.medecinNom ?? '').trim();
+    final motif = (rdv.motif ?? '').trim();
+    if (medecin.isNotEmpty && motif.isNotEmpty) return '$medecin · $motif';
+    if (medecin.isNotEmpty) return medecin;
+    return motif;
+  }
 
   @override
   Widget build(BuildContext context) {
-    // On calcule la liste filtrée à chaque reconstruction de l'écran :
-    // si _filtreActif est null, on garde tout (.where retourne toujours
-    // vrai) ; sinon, on ne garde que les rendez-vous du statut choisi.
+    // Liste filtrée.
     final rdvFiltres = widget.rendezVous
         .where((rdv) => _filtreActif == null || rdv.statut == _filtreActif)
         .toList();
@@ -42,88 +62,95 @@ class _ListeRendezVousSecretaireState
     return Stack(
       children: [
         Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Ligne horizontale de filtres, défilable si elle ne tient
-            // pas sur la largeur de l'écran.
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
+            // ── Titre + sous-titre (maquette) ─────────────────────
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _puceFiltre(null, 'Tous'),
-                  const SizedBox(width: 8),
-                  _puceFiltre(StatutRendezVous.enAttente, 'En attente'),
-                  const SizedBox(width: 8),
-                  _puceFiltre(StatutRendezVous.confirme, 'Confirmés'),
-                  const SizedBox(width: 8),
-                  _puceFiltre(StatutRendezVous.annule, 'Annulés'),
+                  Text(
+                    'Rendez-vous',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Tous les rendez-vous de l\'hôpital',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.texteFaible,
+                    ),
+                  ),
                 ],
               ),
             ),
-            // Expanded : la liste prend tout l'espace vertical restant
-            // sous la ligne de filtres.
+
+            // ── Pilules de filtre (défilables) ────────────────────
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                children: [
+                  ChipFiltrePilule(
+                    label: 'Tous',
+                    selectionne: _filtreActif == null,
+                    onTap: () => setState(() => _filtreActif = null),
+                  ),
+                  ..._ordreFiltres.map(
+                    (s) => ChipFiltrePilule(
+                      label: libelleStatutRdv(s),
+                      selectionne: _filtreActif == s,
+                      onTap: () => setState(() => _filtreActif = s),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Liste des rendez-vous ──────────────────────────────
             Expanded(
               child: rdvFiltres.isEmpty
                   ? const Center(
-                      child: Text(
-                        'Aucun rendez-vous pour ce filtre.',
-                        style: TextStyle(color: Colors.black45),
+                      child: EtatVide(
+                        message: 'Aucun rendez-vous pour ce filtre.',
+                        detail: 'Essayez un autre filtre ci-dessus.',
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
                       itemCount: rdvFiltres.length,
                       itemBuilder: (context, index) {
                         final rdv = rdvFiltres[index];
-                        return RendezVousCard(
+                        return CarteRdvListe(
                           rdv: rdv,
-                          afficherMedecin: true,
-                          onTap: widget.onTapRendezVous != null
-                              ? () => widget.onTapRendezVous!(rdv)
-                              : null,
+                          sousTitre: _ligneMedecin(rdv),
+                          onTap: widget.onTapRendezVous == null
+                              ? null
+                              : () => widget.onTapRendezVous!(rdv),
                         );
                       },
                     ),
             ),
           ],
         ),
+        // ── Bouton flottant « Nouveau rendez-vous » ───────────────
         Positioned(
           bottom: 16,
           right: 16,
-          // Bouton étendu : libellé texte seul (pas d'icône "+").
           child: FloatingActionButton.extended(
             onPressed: widget.onNouveauRendezVous,
-            backgroundColor: const Color(0xFF0B57D0), // bleuMedical
+            backgroundColor: AppColors.bleuVif,
             foregroundColor: Colors.white,
             label: const Text('Nouveau rendez-vous'),
           ),
         ),
       ],
-    );
-  }
-
-  // Construit une "puce" cliquable pour un filtre donné.
-  // Design épuré : texte seul, sans rectangle ni bordure.
-  // La puce active est en gras et colorée, les autres en gris.
-  Widget _puceFiltre(StatutRendezVous? valeur, String libelle) {
-    final estActif = _filtreActif == valeur;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _filtreActif = valeur;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Text(
-          libelle,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: estActif ? FontWeight.w700 : FontWeight.w400,
-            color: estActif ? AppColors.bleuMedical : AppColors.texteFaible,
-          ),
-        ),
-      ),
     );
   }
 }

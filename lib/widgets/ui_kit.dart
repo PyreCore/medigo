@@ -9,6 +9,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../models/rendez_vous.dart';
 import '../theme/medigo_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -77,6 +78,20 @@ ImageProvider? imageProfil(String? url) {
     }
   }
   return NetworkImage(url);
+}
+
+/// Jour relatif d'un rendez-vous pour la liste : « Aujourd'hui »,
+/// « Demain », « Hier », sinon la date courte « 15 octobre ».
+/// Réutilise la table `_mois` définie plus haut.
+String jourRelatif(DateTime date) {
+  final maintenant = DateTime.now();
+  final aujourdhui = DateTime(maintenant.year, maintenant.month, maintenant.day);
+  final jour = DateTime(date.year, date.month, date.day);
+  final ecart = jour.difference(aujourdhui).inDays;
+  if (ecart == 0) return 'Aujourd\'hui';
+  if (ecart == 1) return 'Demain';
+  if (ecart == -1) return 'Hier';
+  return '${date.day} ${_mois[date.month - 1]}';
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -399,10 +414,11 @@ class _ApparitionState extends State<Apparition> {
 /// de Medigo sur les écrans de tableau de bord.
 /// ─────────────────────────────────────────────────────────────────────
 const LinearGradient degradeMedigo = LinearGradient(
-  // Haut → bas : le bleu clair est en haut, le bleu nuit en bas.
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xFF4B80FC), Color(0xFF28211A)],
+  // Diagonal : bleu vif en haut à gauche → noir profond en bas à droite
+  // (aligné sur la maquette « Medigo Médecin et Secrétaire »).
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF3B5BFD), Color(0xFF0B0A1A)],
 );
 
 /// Carte au dégradé signature : même géométrie que CarteMedigo (coins
@@ -444,7 +460,7 @@ class CarteGradientMedigo extends StatelessWidget {
         // Lombre reprend la teinte du dégradé pour un rendu cohérent.
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4B80FC).withValues(alpha: 0.28),
+            color: const Color(0xFF3B5BFD).withValues(alpha: 0.28),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
@@ -566,6 +582,539 @@ class _CompteurAnime extends StatelessWidget {
       builder: (context, valeurAnimee, _) => Text(
         valeurAnimee.round().toString(),
         style: style,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// COMPOSANTS DE LA MAQUETTE « Medigo Médecin et Secrétaire »
+// Badges de statut, pastilles d'heure, avatars à initiales, tuiles de
+// statistiques à icône, bandeaux d'information et dégradés signature.
+// (Ajoutés sans modifier les composants existants, pour ne pas déteindre
+// sur l'espace Patient qui réutilise CarteMedigo.)
+// ─────────────────────────────────────────────────────────────────────
+
+/// Dégradé SIGNATURE de la maquette : bleu vif en haut à gauche qui
+/// descend vers un noir profond en bas à droite (diagonal). Utilisé par
+/// la carte « Prochain rendez-vous », le bouton « Accepter » et la barre
+/// de navigation.
+const LinearGradient degradeSignature = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF3B5BFD), Color(0xFF0B0A1A)],
+);
+
+/// Dégradé de l'en-tête du détail d'un rendez-vous : lavande très claire
+/// en haut à gauche → indigo en bas à droite. Le texte y reste NAVY
+/// (donc lisible sur la partie claire).
+const LinearGradient degradeDetail = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFFEFEDFB), Color(0xFF5A6BFF)],
+);
+
+/// Dégradé des bandeaux d'information (« Lecture seule ») : lavande à
+/// gauche → bleu à droite (horizontal).
+const LinearGradient degradeBandeau = LinearGradient(
+  begin: Alignment.centerLeft,
+  end: Alignment.centerRight,
+  colors: [Color(0xFFECEAFA), Color(0xFF5566FF)],
+);
+
+/// Badge de statut d'un rendez-vous : fond pastel + texte coloré,
+/// entièrement arrondi (pilule). Reproduit exactement la maquette
+/// (Confirmé vert, En attente ambre, Refusé rouge, Terminé gris).
+class PastilleStatut extends StatelessWidget {
+  final StatutRendezVous statut;
+
+  const PastilleStatut({super.key, required this.statut});
+
+  // Fond pastel du badge selon le statut.
+  static Color _fond(StatutRendezVous s) {
+    switch (s) {
+      case StatutRendezVous.confirme:
+        return AppColors.vertClair;
+      case StatutRendezVous.refuse:
+        return AppColors.roseClair;
+      case StatutRendezVous.enAttente:
+        return AppColors.ambreClair;
+      case StatutRendezVous.annule:
+      case StatutRendezVous.termine:
+        return AppColors.grisClair;
+    }
+  }
+
+  // Texte coloré du badge selon le statut.
+  static Color _texte(StatutRendezVous s) {
+    switch (s) {
+      case StatutRendezVous.confirme:
+        return AppColors.vertBadge;
+      case StatutRendezVous.refuse:
+        return AppColors.rougeBadge;
+      case StatutRendezVous.enAttente:
+        return AppColors.ambreBadge;
+      case StatutRendezVous.annule:
+      case StatutRendezVous.termine:
+        return AppColors.grisBadge;
+    }
+  }
+
+  // Libellé affiché selon le statut.
+  static String _libelle(StatutRendezVous s) {
+    switch (s) {
+      case StatutRendezVous.confirme:
+        return 'Confirmé';
+      case StatutRendezVous.refuse:
+        return 'Refusé';
+      case StatutRendezVous.enAttente:
+        return 'En attente';
+      case StatutRendezVous.annule:
+        return 'Annulé';
+      case StatutRendezVous.termine:
+        return 'Terminé';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _fond(statut),
+        borderRadius: BorderRadius.circular(Rayons.pillule),
+      ),
+      child: Text(
+        _libelle(statut),
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+          color: _texte(statut),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pilule de filtre (onglets « Rendez-vous ») : active = fond sombre +
+/// texte blanc ; inactive = blanc cerné d'un fin liseré. Comme la maquette.
+class ChipFiltrePilule extends StatelessWidget {
+  final String label;
+  final bool selectionne;
+  final VoidCallback onTap;
+
+  const ChipFiltrePilule({
+    super.key,
+    required this.label,
+    required this.selectionne,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Rayons.pillule),
+            color: selectionne ? AppColors.navy : Colors.white,
+            border: selectionne ? null : Border.all(color: AppColors.trait),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: selectionne ? Colors.white : AppColors.texte,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pastille d'heure de la liste du tableau de bord : carré arrondi bleu
+/// clair, heure en bleu vif gras (ex : « 09:00 »).
+class PastilleHeure extends StatelessWidget {
+  final String heure;
+
+  const PastilleHeure({super.key, required this.heure});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.bleuClair,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        heure,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          color: AppColors.bleuVif,
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar circulaire à initiales (fond bleu clair, initiales bleues) —
+/// utilisé pour les patients dans les listes et le détail.
+class AvatarInitiales extends StatelessWidget {
+  final String lettres;
+
+  /// Rayon du cercle (rayon 22 → 44 px de large, comme la maquette).
+  final double rayon;
+
+  /// Photo éventuelle (base64 ou réseau) ; si absente → initiales.
+  final ImageProvider? photo;
+
+  const AvatarInitiales({
+    super.key,
+    required this.lettres,
+    this.rayon = 22,
+    this.photo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final taille = rayon * 2;
+    // Photo présente : on l'affiche dans un cercle.
+    if (photo != null) {
+      return ClipOval(
+        child: Image(
+          image: photo!,
+          width: taille,
+          height: taille,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    // Sinon : initiales sur fond pastel.
+    return Container(
+      width: taille,
+      height: taille,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: AppColors.bleuClair, shape: BoxShape.circle),
+      child: Text(
+        lettres,
+        style: TextStyle(
+          fontSize: rayon * 0.72,
+          fontWeight: FontWeight.w800,
+          color: AppColors.bleuVif,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tuile de statistique de la maquette : pastille d'icône pastel en
+/// haut, grand chiffre animé, puis libellé gris (peut tenir sur 2 lignes).
+class TuileStatIcone extends StatelessWidget {
+  final IconData icone;
+  final Color couleur; // couleur de l'icône
+  final Color fondPastel; // fond circulaire pastel de l'icône
+  final String valeur;
+  final String libelle;
+
+  const TuileStatIcone({
+    super.key,
+    required this.icone,
+    required this.couleur,
+    required this.fondPastel,
+    required this.valeur,
+    required this.libelle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CarteMedigo(
+      padding: const EdgeInsets.all(15),
+      rayon: Rayons.carte,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Pastille d'icône.
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: fondPastel, shape: BoxShape.circle),
+            child: Icon(icone, size: 20, color: couleur),
+          ),
+          const SizedBox(height: 12),
+          // Grand chiffre animé (comme TuileStat).
+          _CompteurAnime(valeur: valeur, couleur: AppColors.texte),
+          const SizedBox(height: 3),
+          Text(
+            libelle,
+            maxLines: 2,
+            style: const TextStyle(fontSize: 12, color: AppColors.texteFaible),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bandeau d'information (ex : « Lecture seule » des disponibilités) :
+/// dégradé lavande→bleu, pastille bleue avec icône blanche, titre gras
+/// navy et corps de texte navy.
+class BandeauInfo extends StatelessWidget {
+  final IconData icone;
+  final String titre;
+  final String corps;
+
+  const BandeauInfo({
+    super.key,
+    required this.icone,
+    required this.titre,
+    required this.corps,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: degradeBandeau,
+        borderRadius: BorderRadius.circular(Rayons.carte),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Pastille bleue avec icône blanche.
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: AppColors.bleuVif,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icone, size: 22, color: Colors.white),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titre,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  corps,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bouton principal en dégradé signature (bleu → nuit), texte blanc gras.
+/// Utilisé pour « Accepter » dans le détail d'un rendez-vous.
+class BoutonDegrade extends StatelessWidget {
+  final String texte;
+  final VoidCallback? onPressed;
+  final bool pleineLargeur;
+  final double hauteur;
+
+  const BoutonDegrade({
+    super.key,
+    required this.texte,
+    required this.onPressed,
+    this.pleineLargeur = true,
+    this.hauteur = 52,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Enfoncement(
+      actif: onPressed != null,
+      child: Opacity(
+        opacity: onPressed != null ? 1 : 0.55,
+        child: GestureDetector(
+          onTap: onPressed,
+          child: Container(
+            height: hauteur,
+            width: pleineLargeur ? double.infinity : null,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              gradient: degradeSignature,
+              borderRadius: BorderRadius.circular(Rayons.pillule),
+            ),
+            child: Text(
+              texte,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Carte de rendez-vous du TABLEAU DE BORD (« Rendez-vous d'aujourd'hui »)
+/// : pastille d'heure à gauche, nom + motif au milieu, badge de statut à
+/// droite. Reproduit la maquette. (Distincte de RendezVousCard, qui sert
+/// l'espace Patient et garde sa flèche.)
+class CarteRdvTableau extends StatelessWidget {
+  final RendezVous rdv;
+  final VoidCallback? onTap;
+
+  /// Sous-titre forcé (ex : « Dr X » pour la secrétaire). Si null, on
+  /// affiche le motif du rendez-vous.
+  final String? sousTitre;
+
+  const CarteRdvTableau({
+    super.key,
+    required this.rdv,
+    this.onTap,
+    this.sousTitre,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final texte = sousTitre ?? (rdv.motif ?? '');
+    return CarteMedigo(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      rayon: Rayons.carte,
+      child: Row(
+        children: [
+          PastilleHeure(heure: rdv.heure),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rdv.patientNomComplet,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.texte,
+                  ),
+                ),
+                if (texte.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    texte.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.texteFaible,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          PastilleStatut(statut: rdv.statut),
+        ],
+      ),
+    );
+  }
+}
+
+/// Carte de rendez-vous de la LISTE (« Rendez-vous ») : avatar à initiales
+/// à gauche, nom + « jour · heure » + motif au milieu, badge de statut à
+/// droite. Reproduit la maquette.
+class CarteRdvListe extends StatelessWidget {
+  final RendezVous rdv;
+  final VoidCallback? onTap;
+
+  /// Dernière ligne forcée (ex : « Dr X » pour la secrétaire). Si null,
+  /// on affiche le motif du rendez-vous.
+  final String? sousTitre;
+
+  const CarteRdvListe({
+    super.key,
+    required this.rdv,
+    this.onTap,
+    this.sousTitre,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final motif = (sousTitre ?? rdv.motif ?? '').trim();
+    return CarteMedigo(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      rayon: Rayons.carte,
+      child: Row(
+        children: [
+          AvatarInitiales(lettres: initiales(rdv.patientPrenom, rdv.patientNom)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rdv.patientNomComplet,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.texte,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${jourRelatif(rdv.date)} · ${rdv.heure}',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.texteFaible,
+                  ),
+                ),
+                if (motif.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    motif,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.texteFaible,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          PastilleStatut(statut: rdv.statut),
+        ],
       ),
     );
   }

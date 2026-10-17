@@ -176,7 +176,7 @@ class _HorairesMedecinsSecretaireState
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.bleuMedical,
+                backgroundColor: AppColors.bleuVif,
               ),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Valider'),
@@ -280,6 +280,29 @@ class _HorairesMedecinsSecretaireState
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── Titre + sous-titre ────────────────────────────────────
+        const Padding(
+          padding: EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Horaires des médecins',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Gérez les plages de consultation de votre hôpital',
+                style: TextStyle(fontSize: 14, color: AppColors.texteFaible),
+              ),
+            ],
+          ),
+        ),
+
         // ── Sélecteur de médecin (pilules de texte, sans icône) ────
         const Text(
           'Choisir un médecin',
@@ -384,11 +407,11 @@ class _PiluleMedecin extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color:
-              selectionnee ? AppColors.bleuMedical : AppColors.surface,
+              selectionnee ? AppColors.bleuVif : AppColors.surface,
           borderRadius: BorderRadius.circular(Rayons.pillule),
           border: Border.all(
             color:
-                selectionnee ? AppColors.bleuMedical : AppColors.trait,
+                selectionnee ? AppColors.bleuVif : AppColors.trait,
           ),
         ),
         child: Text(
@@ -521,7 +544,7 @@ class _LignePlage extends StatelessWidget {
           const SizedBox(width: 4),
           _ActionTexte(
             libelle: 'Modifier',
-            couleur: AppColors.bleuMedical,
+            couleur: AppColors.bleuVif,
             onTap: onModifier,
           ),
           const SizedBox(width: 4),

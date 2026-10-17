@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
-import '../../widgets/rendez_vous_card.dart';
+import '../../theme/medigo_theme.dart';
+import '../../widgets/ui_kit.dart';
 
 /// Écran de détail d'un rendez-vous, avec actions accepter / refuser.
+/// Reproduit la maquette : en-tête (retour + titre + badge), carte en
+/// dégradé lavande→indigo (avatar, nom, Date/Heure/Motif), carte
+/// « Informations du patient » à icônes, pied de boutons fixe.
 // StatelessWidget : cet écran affiche juste les infos du rdv reçu et
-// délègue les actions (accepter/refuser) à des fonctions fournies par
-// le parent — il ne gère aucun état lui-même.
+// délègue les actions (accepter/refuser) au parent.
 class DetailRendezVousMedecin extends StatelessWidget {
-  final RendezVous rdv; // le rendez-vous dont on affiche le détail
+  final RendezVous rdv;
 
-  // Fonctions optionnelles et ASYNCHRONES (elles retournent Future<void>
-  // car elles vont probablement appeler Firestore, qui prend du temps).
-  // Si elles sont null, les boutons correspondants seront désactivés
-  // (voir plus bas : onPressed: null quand la fonction n'est pas fournie).
+  // Fonctions optionnelles et ASYNCHRONES (Future<void> car elles vont
+  // appeler Firestore). Si null, le bouton correspondant est désactivé.
   final Future<void> Function()? onAccepter;
   final Future<void> Function()? onRefuser;
 
@@ -23,232 +24,387 @@ class DetailRendezVousMedecin extends StatelessWidget {
     this.onRefuser,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final couleur = couleurStatutRdv(rdv.statut);
-    // On ne veut proposer "Accepter/Refuser" que si le rendez-vous est
-    // encore "en attente" : ça n'aurait pas de sens de refuser un
-    // rendez-vous déjà confirmé, par exemple.
-    final enAttente = rdv.statut == StatutRendezVous.enAttente;
-
-    // "Scaffold" = la structure de base d'un écran Material (zone pour
-    // la barre du haut, zone pour le contenu, etc.). Contrairement aux
-    // autres écrans (qui ne sont que le CONTENU d'un onglet), celui-ci
-    // a son propre Scaffold car il s'ouvre en PLEIN ÉCRAN par-dessus
-    // les onglets (via Navigator.push, voir espace_medecin.dart).
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
-      // AppBar = la barre en haut, avec le titre et (ici) automatiquement
-      // une flèche "retour" ajoutée par Flutter car cet écran a été ouvert
-      // via Navigator.push (il sait qu'il peut revenir en arrière).
-      appBar: AppBar(title: const Text('Détail du rendez-vous')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+  // Carte principale (dégradé) : avatar + nom + sous-titre, puis les
+  // lignes Date / Heure / Motif séparées par de fins filets.
+  Widget _carteInfo(String dateLongue) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: degradeDetail,
+        borderRadius: BorderRadius.circular(Rayons.carte),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Carte principale avec le nom du patient, le statut, l'heure...
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.black.withValues(alpha: 0.06),
+          Row(
+            children: [
+              // Avatar blanc + initiales bleues (comme la maquette).
+              Container(
+                width: 54,
+                height: 54,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  initiales(rdv.patientPrenom, rdv.patientNom),
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.bleuVif,
+                  ),
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Ligne du haut : nom du patient à gauche, badge de statut à droite.
-                Row(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Flexible : un nom de patient très long est coupé
-                    // (ellipsis) au lieu de faire déborder la Row et de
-                    // planter l'écran sur un petit téléphone (360 px).
-                    Flexible(
-                      child: Text(
-                        rdv.patientNomComplet,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Text(
+                      rdv.patientNomComplet,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: couleur.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        libelleStatutRdv(rdv.statut),
-                        style: TextStyle(
-                          color: couleur,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Consultation de suivi',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.texteFaible,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Ligne "libellé …… valeur" (widget privé, sans icône).
-                _LigneInfo(libelle: 'Heure', valeur: rdv.heure),
-                // "..." (spread) avec "if" : ce bloc n'ajoute des widgets à
-                // "children" QUE SI la condition est vraie (motif existe
-                // et n'est pas vide). Sinon, rien n'est ajouté du tout —
-                // différent d'un "if" classique qui devrait choisir entre
-                // deux widgets, ici on peut carrément n'en ajouter aucun.
-                if (rdv.motif != null && rdv.motif!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _LigneInfo(libelle: 'Motif', valeur: rdv.motif!),
-                ],
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Lignes « libellé …… valeur », chacune précédée d'un filet.
+          _LigneDetail(libelle: 'Date', valeur: dateLongue, separateur: true),
+          _LigneDetail(libelle: 'Heure', valeur: rdv.heure, separateur: true),
+          if (rdv.motif != null && rdv.motif!.isNotEmpty)
+            _LigneDetail(libelle: 'Motif', valeur: rdv.motif!, separateur: true),
+        ],
+      ),
+    );
+  }
+
+  // Bandeau « refusé » : la raison du refus reste toujours visible.
+  Widget _bandeauRefus() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.roseClair,
+        borderRadius: BorderRadius.circular(Rayons.carte),
+        border: Border.all(
+          color: AppColors.rougeBadge.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rendez-vous refusé',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.rougeBadge,
             ),
           ),
-          // Bandeau « refusé » : si un motif de refus a été enregistré
-          // (par la secrétaire ou par vous), on l'affiche en rouge pour
-          // que la raison du refus soit toujours visible.
-          if (rdv.statut == StatutRendezVous.refuse &&
-              rdv.motifRefus != null &&
-              rdv.motifRefus!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFC62828).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFC62828).withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 4),
+          Text(
+            rdv.motifRefus!,
+            style: const TextStyle(
+              fontSize: 13.5,
+              height: 1.4,
+              color: AppColors.texte,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Carte « Informations du patient » : 3 lignes à icône pastel,
+  // exactement la maquette. (Le modèle RendezVous ne porte pas le
+  // téléphone / la date de naissance / le groupe sanguin : on affiche
+  // « Non renseigné » plutôt que d'inventer des données.)
+  Widget _infosPatient() {
+    return CarteMedigo(
+      padding: const EdgeInsets.all(16),
+      rayon: Rayons.carte,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Informations du patient',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.navy,
+            ),
+          ),
+          const SizedBox(height: 2),
+          _LignePatient(
+            icone: Icons.phone_outlined,
+            fond: AppColors.bleuClair,
+            couleur: AppColors.bleuVif,
+            libelle: 'Téléphone',
+            valeur: 'Non renseigné',
+          ),
+          _LignePatient(
+            icone: Icons.calendar_month_outlined,
+            fond: AppColors.bleuClair,
+            couleur: AppColors.bleuVif,
+            libelle: 'Date de naissance',
+            valeur: 'Non renseigné',
+          ),
+          _LignePatient(
+            icone: Icons.bloodtype_outlined,
+            fond: AppColors.roseClair,
+            couleur: AppColors.rougeBadge,
+            libelle: 'Groupe sanguin',
+            valeur: 'Non renseigné',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Pied fixe : Refuser (contour rouge) + Accepter (dégradé signature).
+  // Il ne s'affiche QUE si le rendez-vous est encore en attente.
+  Widget _piedActions(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.trait)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: BoutonContour(
+              texte: 'Refuser',
+              couleur: AppColors.rouge,
+              hauteur: 52,
+              onPressed: onRefuser == null
+                  ? null
+                  : () async {
+                      await onRefuser!();
+                      if (context.mounted) Navigator.pop(context);
+                    },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: BoutonDegrade(
+              texte: 'Accepter',
+              hauteur: 52,
+              onPressed: onAccepter == null
+                  ? null
+                  : () async {
+                      await onAccepter!();
+                      if (context.mounted) Navigator.pop(context);
+                    },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // On ne propose Accepter/Refuser que si le rendez-vous est en attente.
+    final enAttente = rdv.statut == StatutRendezVous.enAttente;
+    // Date longue en français + année, ex : « Jeudi 15 octobre 2026 ».
+    final dateLongue = '${dateDuJour(rdv.date)} ${rdv.date.year}';
+
+    // Pas d'AppBar Material : on construit l'en-tête de la maquette
+    // (chevron de retour + titre + badge de statut) nous-mêmes.
+    return Scaffold(
+      backgroundColor: AppColors.fond,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── En-tête : retour + titre + badge statut ──────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
+              child: Row(
                 children: [
-                  const Text(
-                    'Rendez-vous refusé',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFC62828),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.chevron_left,
+                      size: 28,
+                      color: AppColors.navy,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    rdv.motifRefus!,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      height: 1.4,
-                      color: Colors.black87,
+                  const SizedBox(width: 2),
+                  const Expanded(
+                    child: Text(
+                      'Détail du rendez-vous',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
                     ),
                   ),
+                  PastilleStatut(statut: rdv.statut),
                 ],
               ),
             ),
-          ],
-          // Les boutons Accepter/Refuser ne s'affichent QUE si le
-          // rendez-vous est encore en attente (voir variable "enAttente"
-          // calculée plus haut).
-          if (enAttente) ...[
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                // Expanded fait que chaque bouton prend la moitié de la largeur.
-                Expanded(
-                  // OutlinedButton = bouton avec juste un contour, pas de
-                  // fond plein (style "action secondaire", ici Refuser).
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFC62828), // texte rouge
-                      side: const BorderSide(color: Color(0xFFC62828)), // contour rouge
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    // Opérateur ternaire : si onRefuser est null (le
-                    // parent n'a pas fourni de fonction), le bouton est
-                    // DÉSACTIVÉ (grisé, non cliquable) car onPressed: null.
-                    // Sinon, on définit une fonction asynchrone qui...
-                    onPressed: onRefuser == null
-                        ? null
-                        : () async {
-                            // ...attend que le refus soit bien enregistré...
-                            await onRefuser!();
-                            // ...puis vérifie que l'écran est toujours affiché
-                            // (context.mounted) avant de fermer cet écran de
-                            // détail et revenir à l'écran précédent. Cette
-                            // vérification évite une erreur si l'utilisateur
-                            // a déjà quitté l'écran pendant que "await" attendait.
-                            if (context.mounted) Navigator.pop(context);
-                          },
-                    child: const Text('Refuser'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  // ElevatedButton = bouton avec un fond plein (style
-                  // "action principale", ici Accepter, mis en avant).
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E6F6E),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: onAccepter == null
-                        ? null
-                        : () async {
-                            await onAccepter!();
-                            if (context.mounted) Navigator.pop(context);
-                          },
-                    child: const Text('Accepter'),
-                  ),
-                ),
-              ],
+
+            // ── Contenu défilant ──────────────────────────────────────
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                children: [
+                  _carteInfo(dateLongue),
+                  if (rdv.statut == StatutRendezVous.refuse &&
+                      rdv.motifRefus != null &&
+                      rdv.motifRefus!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _bandeauRefus(),
+                  ],
+                  const SizedBox(height: 16),
+                  _infosPatient(),
+                ],
+              ),
             ),
+
+            // ── Pied de boutons (seulement si en attente) ─────────────
+            if (enAttente) _piedActions(context),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-// Petit widget privé : ligne "libellé …… valeur" — sans icône
-// (utilisé pour l'heure et le motif dans la carte au-dessus).
-class _LigneInfo extends StatelessWidget {
+// Ligne « libellé …… valeur » de la carte dégradée, précédée d'un filet.
+class _LigneDetail extends StatelessWidget {
   final String libelle;
   final String valeur;
-  const _LigneInfo({required this.libelle, required this.valeur});
+  final bool separateur;
+
+  const _LigneDetail({
+    required this.libelle,
+    required this.valeur,
+    this.separateur = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            libelle,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
-          ),
-          const SizedBox(width: 12),
-          // Flexible : si la valeur (ex: un long motif) est trop longue,
-          // elle passe à la ligne au lieu de faire déborder l'écran.
-          Expanded(
-            child: Text(
-              valeur,
-              textAlign: TextAlign.end,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (separateur)
+          Container(height: 1, color: AppColors.navy.withValues(alpha: 0.08)),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                libelle,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.texteFaible,
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  valeur,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+}
+
+// Ligne « pastille icône + libellé + valeur » de la carte patient,
+// précédée d'un filet gris.
+class _LignePatient extends StatelessWidget {
+  final IconData icone;
+  final Color fond;
+  final Color couleur;
+  final String libelle;
+  final String valeur;
+
+  const _LignePatient({
+    required this.icone,
+    required this.fond,
+    required this.couleur,
+    required this.libelle,
+    required this.valeur,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(height: 1, color: AppColors.trait),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: fond, shape: BoxShape.circle),
+                child: Icon(icone, size: 19, color: couleur),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      libelle,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.texteFaible,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      valeur,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
