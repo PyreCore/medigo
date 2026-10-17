@@ -10,6 +10,7 @@
 //    dégradé signature, avec icône + libellé et pilule active (maquette).
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
+import '../theme/maquette_tokens.dart';
 import '../theme/medigo_theme.dart';
 import 'ui_kit.dart';
 
@@ -88,7 +89,7 @@ class StructureEspace extends StatelessWidget {
         // ── Écran LARGE : rail à gauche ────────────────────────────
         if (contraintes.maxWidth >= 900) {
           return Scaffold(
-            backgroundColor: AppColors.fond,
+            backgroundColor: MaquetteCouleurs.fond,
             body: Row(
               children: [
                 _RailMedigo(
@@ -141,7 +142,7 @@ class StructureEspace extends StatelessWidget {
         // des contraintes de hauteur bornées — indispensable aux ListView).
         // ConstrainedBox borne seulement la largeur, sans casser la hauteur.
         return Scaffold(
-          backgroundColor: AppColors.fond,
+          backgroundColor: MaquetteCouleurs.fond,
           appBar: BarreHauteMedigo(titre: libelles[indexActif]),
           body: SafeArea(
             top: false,
@@ -362,18 +363,11 @@ class _BarreBasseMedigo extends StatelessWidget {
       // (0 → ∞). Sans borne, un « Center » (Align sans heightFactor) ou un
       // Column en mainAxisSize.max gonfle à TOUTE la hauteur offerte → la
       // barre mesure alors la hauteur de l'écran et le corps reçoit 0 px
-      // (écran blanc). La borne garantit une taille normale. Elle est
-      // assez haute (96) pour laisser passer la zone sûre des iPhone
-      // (indicateur d'accueil) SANS tronquer, et reste un plafond de sécurité.
+      // (écran blanc). La borne garantit une taille normale (~68 px de
+      // contenu + zone sûre basse), et reste un plafond de sécurité.
       constraints: const BoxConstraints(maxHeight: 96),
-      // Fond en dégradé signature (bleu → nuit, horizontal), comme la maquette.
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Color(0xFF3B5BFD), Color(0xFF0B0A1A)],
-        ),
-      ),
+      // Fond en dégradé G de la maquette (#2458D3 → #28211A, ≈ 80°).
+      decoration: const BoxDecoration(gradient: MaquetteDegrades.principal),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -391,20 +385,27 @@ class _BarreBasseMedigo extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Pastille de l'icône : blanche quand actif.
+                      // Onglet ACTIF : pastille 56 x 32 (rayon 16) fond
+                      // #E8EFFD, icône en #2458D3 (maquette §3).
                       Container(
-                        padding: const EdgeInsets.all(5),
+                        width: 56,
+                        height: 32,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: actif ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(999),
+                          color: actif
+                              ? MaquetteCouleurs.bleuClair
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           _iconePourLibelle(entree.value),
-                          size: 20,
-                          color: actif ? AppColors.bleuVif : Colors.white70,
+                          size: 22,
+                          color: actif
+                              ? MaquetteCouleurs.bleu
+                              : Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       // Libellé sous l'icône. FittedBox : il RÉTRÉCIT si la
                       // largeur manque (ex : 5 onglets sur 360 px).
                       FittedBox(
@@ -413,10 +414,11 @@ class _BarreBasseMedigo extends StatelessWidget {
                           entree.value,
                           maxLines: 1,
                           style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight:
-                                actif ? FontWeight.w700 : FontWeight.w500,
-                            color: actif ? Colors.white : Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: actif
+                                ? MaquetteCouleurs.bleu
+                                : Colors.white,
                           ),
                         ),
                       ),

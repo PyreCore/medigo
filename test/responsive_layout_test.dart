@@ -160,7 +160,7 @@ void main() {
           DetailRendezVousMedecin(
             rdv: desRendezVous().first,
             onAccepter: () async {},
-            onRefuser: () async {},
+            onRefuser: (_) async {},
           ),
         );
       });

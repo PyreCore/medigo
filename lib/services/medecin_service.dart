@@ -220,4 +220,54 @@ class MedecinService {
     });
     await _creneaux.liberer(rdvId);
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // AJOUTS (maquette — espaces Médecin/Secrétaire). Aucune méthode
+  // existante n'est modifiée ni supprimée, les nouveaux paramètres
+  // restent optionnels.
+  // ─────────────────────────────────────────────────────────────────
+
+  /// Termine la consultation d'un rendez-vous CONFIRMÉ (statut « termine »).
+  ///
+  /// Règles Firestore : un médecin ne peut updater que SES rendez-vous
+  /// (resource.data.medecinId == uid), ce qui est le cas ici.
+  /// Le créneau reste occupé : une consultation terminée est une
+  /// archive, pas une heure de nouveau libre.
+  Future<void> terminerRendezVous(String rdvId) async {
+    await _db.collection('rendez_vous').doc(rdvId).update({
+      'statut': 'termine',
+    });
+  }
+
+  /// (AJOUT) Informations patient d'un rendez-vous, pour l'écran de
+  /// détail : téléphone, date de naissance et groupe sanguin.
+  ///
+  /// Le document « rendez_vous » porte le champ "patientId" (id du
+  /// dossier dans la collection "patients", cf. getStatistiques et
+  /// SecretaireService.getPatientsPourHopital). On lit CE dossier (et
+  /// non users/{uid} : les règles Firestore interdisent à un médecin de
+  /// lire le profil users d'un patient).
+  ///
+  /// Renvoie null si le rendez-vous est introuvable ou s'il ne pointe
+  /// vers aucun dossier patient ; l'écran affiche alors « Non
+  /// renseigné » plutôt que de planter.
+  Future<({String? telephone, DateTime? dateNaissance, String? groupeSanguin})?>
+      getInfosPatientRendezVous(String rdvId) async {
+    final rdvDoc = await _db.collection('rendez_vous').doc(rdvId).get();
+    if (!rdvDoc.exists) return null;
+
+    final patientId = (rdvDoc.data()!['patientId'] ?? '').toString();
+    if (patientId.isEmpty) return null;
+
+    final patientDoc = await _db.collection('patients').doc(patientId).get();
+    if (!patientDoc.exists) return null;
+
+    final data = patientDoc.data()!;
+    final naissance = data['dateNaissance'];
+    return (
+      telephone: (data['telephone'] ?? '') as String?,
+      dateNaissance: naissance is Timestamp ? naissance.toDate() : null,
+      groupeSanguin: (data['groupeSanguin'] ?? '') as String?,
+    );
+  }
 }

@@ -1,60 +1,127 @@
+// ─────────────────────────────────────────────────────────────────────
+// DÉTAIL D'UN RENDEZ-VOUS (MÉDECIN) — maquette §4.3.
+//
+//  · en-tête : bouton retour 44 px, titre 19 px, pastille de statut ;
+//  · carte patient : avatar initiales 56 px, nom 18 px w800, motif 13,
+//    puis lignes Date / Heure / Motif séparées par un trait ;
+//  · carte « Informations du patient » : téléphone, date de naissance,
+//    groupe sanguin, LUS DANS FIREBASE (MedecinService) avec
+//    indicateur de chargement et gestion d'erreur ;
+//  · si refusé : bloc « Motif du refus » (#FDE8E6) ;
+//  · barre d'action fixe en bas selon le statut : Refuser/Accepter
+//    (en attente), Terminer la consultation (confirmé), bloc «
+//    Consultation terminée » (terminé), bloc « Rendez-vous refusé » ;
+//  · « Refuser » ouvre un panneau du bas (coins hauts 28) sur fond
+//    assombri, avec champ « Motif du refus » OBLIGATOIRE.
+// La LOGIQUE (callbacks reçus du parent) est inchangée.
+// ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../models/rendez_vous.dart';
-import '../../theme/medigo_theme.dart';
-import '../../widgets/ui_kit.dart';
+import '../../services/medecin_service.dart';
+import '../../theme/maquette_tokens.dart';
+import '../../widgets/maquette_widgets.dart';
+import '../../widgets/ui_kit.dart'; // dateDuJour(), initiales()
 
-/// Écran de détail d'un rendez-vous, avec actions accepter / refuser.
-/// Reproduit la maquette : en-tête (retour + titre + badge), carte en
-/// dégradé lavande→indigo (avatar, nom, Date/Heure/Motif), carte
-/// « Informations du patient » à icônes, pied de boutons fixe.
-// StatelessWidget : cet écran affiche juste les infos du rdv reçu et
-// délègue les actions (accepter/refuser) au parent.
-class DetailRendezVousMedecin extends StatelessWidget {
+class DetailRendezVousMedecin extends StatefulWidget {
   final RendezVous rdv;
+
+  /// Spécialité du médecin connecté (sous-titre de la carte patient).
+  final String? specialiteMedecin;
 
   // Fonctions optionnelles et ASYNCHRONES (Future<void> car elles vont
   // appeler Firestore). Si null, le bouton correspondant est désactivé.
   final Future<void> Function()? onAccepter;
-  final Future<void> Function()? onRefuser;
+
+  /// Refus AVEC motif obligatoire (saisi dans le panneau du bas).
+  final Future<void> Function(String motif)? onRefuser;
+
+  /// Passe le rendez-vous au statut « terminé » (bouton du pied).
+  final Future<void> Function()? onTerminer;
 
   const DetailRendezVousMedecin({
     super.key,
     required this.rdv,
+    this.specialiteMedecin,
     this.onAccepter,
     this.onRefuser,
+    this.onTerminer,
   });
 
-  // Carte principale (dégradé) : avatar + nom + sous-titre, puis les
-  // lignes Date / Heure / Motif séparées par de fins filets.
-  Widget _carteInfo(String dateLongue) {
-    return Container(
+  @override
+  State<DetailRendezVousMedecin> createState() =>
+      _DetailRendezVousMedecinState();
+}
+
+class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
+  // Service créé LAZY (à la première utilisation) : l'instanciation
+  // immédiate casserait les tests widget sans Firebase initialisé, car
+  // le constructeur de MedecinService accède à FirebaseFirestore.instance.
+  MedecinService? _service;
+  MedecinService get service => _service ??= MedecinService();
+
+  // Informations patient (téléphone / naissance / groupe sanguin),
+  // lues dans Firestore à l'ouverture de l'écran.
+  ({String? telephone, DateTime? dateNaissance, String? groupeSanguin})?
+      _infosPatient;
+  bool _chargementInfos = true;
+  bool _erreurInfos = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerInfosPatient();
+  }
+
+  Future<void> _chargerInfosPatient() async {
+    setState(() {
+      _chargementInfos = true;
+      _erreurInfos = false;
+    });
+    try {
+      final infos = await service.getInfosPatientRendezVous(widget.rdv.id);
+      if (!mounted) return;
+      setState(() {
+        _infosPatient = infos;
+        _chargementInfos = false;
+      });
+    } catch (_) {
+      // Erreur réseau / règles Firestore : on n'affiche jamais de crash,
+      // on retombe sur « Non renseigné » avec une possibilité de réessayer.
+      if (!mounted) return;
+      setState(() {
+        _chargementInfos = false;
+        _erreurInfos = true;
+      });
+    }
+  }
+
+  // Affiche « Non renseigné » seulement quand la donnée est ABSENTE de
+  // Firestore (jamais en dur quand elle existe).
+  String _ouNonRenseigne(String? valeur) =>
+      (valeur == null || valeur.trim().isEmpty) ? 'Non renseigné' : valeur;
+
+  // ── Carte patient (blanche, maquette §4.3) ──────────────────────
+  Widget _cartePatient(String dateLongue) {
+    final motif = (widget.rdv.motif ?? '').trim();
+    final specialite = (widget.specialiteMedecin ?? '').trim();
+    final sousTitre = [
+      if (motif.isNotEmpty) motif else 'Consultation',
+      if (specialite.isNotEmpty) specialite,
+    ].join(' · ');
+
+    return CarteSpec(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: degradeDetail,
-        borderRadius: BorderRadius.circular(Rayons.carte),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // Avatar blanc + initiales bleues (comme la maquette).
-              Container(
-                width: 54,
-                height: 54,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+              AvatarInitialesSpec(
+                lettres: initiales(
+                  widget.rdv.patientPrenom,
+                  widget.rdv.patientNom,
                 ),
-                child: Text(
-                  initiales(rdv.patientPrenom, rdv.patientNom),
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.bleuVif,
-                  ),
-                ),
+                rayon: 28, // 56 px de large (maquette)
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -62,21 +129,23 @@ class DetailRendezVousMedecin extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      rdv.patientNomComplet,
+                      widget.rdv.patientNomComplet,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
+                        color: MaquetteCouleurs.texte,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
-                      'Consultation de suivi',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.texteFaible,
+                    Text(
+                      sousTitre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: MaquetteCouleurs.texteSecondaire,
                       ),
                     ),
                   ],
@@ -85,46 +154,43 @@ class DetailRendezVousMedecin extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          // Lignes « libellé …… valeur », chacune précédée d'un filet.
-          _LigneDetail(libelle: 'Date', valeur: dateLongue, separateur: true),
-          _LigneDetail(libelle: 'Heure', valeur: rdv.heure, separateur: true),
-          if (rdv.motif != null && rdv.motif!.isNotEmpty)
-            _LigneDetail(libelle: 'Motif', valeur: rdv.motif!, separateur: true),
+          // Lignes « libellé …… valeur », séparées par un trait.
+          _LigneDetail(libelle: 'Date', valeur: dateLongue),
+          _LigneDetail(libelle: 'Heure', valeur: widget.rdv.heure),
+          if (motif.isNotEmpty)
+            _LigneDetail(libelle: 'Motif', valeur: widget.rdv.motif!),
         ],
       ),
     );
   }
 
-  // Bandeau « refusé » : la raison du refus reste toujours visible.
+  // ── Bandeau « Motif du refus » (#FDE8E6) ────────────────────────
   Widget _bandeauRefus() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.roseClair,
-        borderRadius: BorderRadius.circular(Rayons.carte),
-        border: Border.all(
-          color: AppColors.rougeBadge.withValues(alpha: 0.3),
-        ),
+        color: MaquetteCouleurs.refuseFond,
+        borderRadius: BorderRadius.circular(MaquetteRayons.carte),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Rendez-vous refusé',
+            'Motif du refus',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: AppColors.rougeBadge,
+              color: MaquetteCouleurs.refuseTexte,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            rdv.motifRefus!,
+            widget.rdv.motifRefus ?? '',
             style: const TextStyle(
               fontSize: 13.5,
               height: 1.4,
-              color: AppColors.texte,
+              color: MaquetteCouleurs.texte,
             ),
           ),
         ],
@@ -132,14 +198,10 @@ class DetailRendezVousMedecin extends StatelessWidget {
     );
   }
 
-  // Carte « Informations du patient » : 3 lignes à icône pastel,
-  // exactement la maquette. (Le modèle RendezVous ne porte pas le
-  // téléphone / la date de naissance / le groupe sanguin : on affiche
-  // « Non renseigné » plutôt que d'inventer des données.)
-  Widget _infosPatient() {
-    return CarteMedigo(
+  // ── Carte « Informations du patient » (données Firestore) ───────
+  Widget _infosPatientCarte() {
+    return CarteSpec(
       padding: const EdgeInsets.all(16),
-      rayon: Rayons.carte,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -148,104 +210,272 @@ class DetailRendezVousMedecin extends StatelessWidget {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: AppColors.navy,
+              color: MaquetteCouleurs.texte,
             ),
           ),
           const SizedBox(height: 2),
-          _LignePatient(
-            icone: Icons.phone_outlined,
-            fond: AppColors.bleuClair,
-            couleur: AppColors.bleuVif,
-            libelle: 'Téléphone',
-            valeur: 'Non renseigné',
-          ),
-          _LignePatient(
-            icone: Icons.calendar_month_outlined,
-            fond: AppColors.bleuClair,
-            couleur: AppColors.bleuVif,
-            libelle: 'Date de naissance',
-            valeur: 'Non renseigné',
-          ),
-          _LignePatient(
-            icone: Icons.bloodtype_outlined,
-            fond: AppColors.roseClair,
-            couleur: AppColors.rougeBadge,
-            libelle: 'Groupe sanguin',
-            valeur: 'Non renseigné',
-          ),
+          if (_chargementInfos)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: MaquetteCouleurs.bleu,
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            _LignePatient(
+              icone: Icons.phone_outlined,
+              fond: MaquetteCouleurs.bleuClair,
+              couleur: MaquetteCouleurs.bleu,
+              libelle: 'Téléphone',
+              valeur: _ouNonRenseigne(_infosPatient?.telephone),
+            ),
+            _LignePatient(
+              icone: Icons.calendar_month_outlined,
+              fond: MaquetteCouleurs.bleuClair,
+              couleur: MaquetteCouleurs.bleu,
+              libelle: 'Date de naissance',
+              valeur: _infosPatient?.dateNaissance == null
+                  ? 'Non renseigné'
+                  : '${dateDuJour(_infosPatient!.dateNaissance)} '
+                        '${_infosPatient!.dateNaissance!.year}',
+            ),
+            _LignePatient(
+              icone: Icons.bloodtype_outlined,
+              fond: MaquetteCouleurs.refuseFond,
+              couleur: MaquetteCouleurs.refuseTexte,
+              libelle: 'Groupe sanguin',
+              valeur: _ouNonRenseigne(_infosPatient?.groupeSanguin),
+            ),
+            if (_erreurInfos)
+              TextButton(
+                onPressed: _chargerInfosPatient,
+                child: const Text(
+                  'Infos indisponibles — Réessayer',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ),
+          ],
         ],
       ),
     );
   }
 
-  // Pied fixe : Refuser (contour rouge) + Accepter (dégradé signature).
-  // Il ne s'affiche QUE si le rendez-vous est encore en attente.
-  Widget _piedActions(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.trait)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: BoutonContour(
-              texte: 'Refuser',
-              couleur: AppColors.rouge,
-              hauteur: 52,
-              onPressed: onRefuser == null
-                  ? null
-                  : () async {
-                      await onRefuser!();
-                      if (context.mounted) Navigator.pop(context);
-                    },
+  // ── Pied fixe : actions selon le statut (maquette §4.3) ─────────
+  Widget _piedActions() {
+    switch (widget.rdv.statut) {
+      case StatutRendezVous.enAttente:
+        return Row(
+          children: [
+            Expanded(
+              child: BoutonContourSpec(
+                texte: 'Refuser',
+                couleur: MaquetteCouleurs.refuseTexte,
+                onPressed: widget.onRefuser == null
+                    ? null
+                    : () => _ouvrirPanneauRefus(context),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: BoutonDegrade(
-              texte: 'Accepter',
-              hauteur: 52,
-              onPressed: onAccepter == null
-                  ? null
-                  : () async {
-                      await onAccepter!();
-                      if (context.mounted) Navigator.pop(context);
-                    },
+            const SizedBox(width: 12),
+            Expanded(
+              child: BoutonDegradeSpec(
+                texte: 'Accepter',
+                onPressed: widget.onAccepter == null
+                    ? null
+                    : () async {
+                        // On capture le Navigator AVANT l'appel asynchrone
+                        // (Astuce pour le lint use_build_context_synchronously).
+                        final navigator = Navigator.of(context);
+                        await widget.onAccepter!();
+                        if (mounted) navigator.pop();
+                      },
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        );
+      case StatutRendezVous.confirme:
+        return BoutonDegradeSpec(
+          texte: 'Terminer la consultation',
+          icone: Icons.check_rounded,
+          onPressed: widget.onTerminer == null
+              ? null
+              : () async {
+                  // Navigator capturé avant l'appel asynchrone (lint).
+                  final navigator = Navigator.of(context);
+                  await widget.onTerminer!();
+                  if (mounted) navigator.pop();
+                },
+        );
+      case StatutRendezVous.termine:
+        return const BlocEtatSpec(
+          texte: 'Consultation terminée',
+          fond: MaquetteCouleurs.termineFond,
+          couleurTexte: MaquetteCouleurs.termineTexte,
+        );
+      case StatutRendezVous.refuse:
+      case StatutRendezVous.annule:
+        return const BlocEtatSpec(
+          texte: 'Rendez-vous refusé',
+          fond: MaquetteCouleurs.refuseFond,
+          couleurTexte: MaquetteCouleurs.refuseTexte,
+        );
+    }
+  }
+
+  // ── Panneau du bas « Refuser ce rendez-vous » (coins hauts 28) ──
+  void _ouvrirPanneauRefus(BuildContext context) {
+    final controleurMotif = TextEditingController();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStatePanneau) {
+            final motifValide = controleurMotif.text.trim().isNotEmpty;
+            return Container(
+              padding: EdgeInsets.only(
+                // Au-dessus du clavier : le panneau glisse vers le haut.
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              decoration: const BoxDecoration(
+                color: MaquetteCouleurs.surface,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Refuser ce rendez-vous',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: MaquetteCouleurs.texte,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Indiquez un motif : il sera visible par le patient. '
+                        'Le créneau sera de nouveau disponible.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: MaquetteCouleurs.texteSecondaire,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: controleurMotif,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Motif du refus *',
+                          hintText: 'Ex : Créneau déjà occupé…',
+                        ),
+                        onChanged: (_) => setStatePanneau(() {}),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: BoutonContourSpec(
+                              texte: 'Annuler',
+                              couleur: MaquetteCouleurs.texteSecondaire,
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            // Désactivé (gris) tant que le motif est vide.
+                            child: BoutonPleinSpec(
+                              texte: 'Confirmer le refus',
+                              onPressed: motifValide
+                                  ? () async {
+                                      final navigator =
+                                          Navigator.of(context);
+                                      final messenger =
+                                          ScaffoldMessenger.of(context);
+                                      final motif =
+                                          controleurMotif.text.trim();
+                                      try {
+                                        await widget.onRefuser!(motif);
+                                      } catch (e) {
+                                        // Erreur Firestore (règles,
+                                        // réseau…) : le panneau reste
+                                        // ouvert, l'erreur est montrée.
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Refus impossible : $e',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      // Ferme le panneau, puis revient à
+                                      // l'espace (le détail).
+                                      navigator.pop();
+                                      navigator.pop();
+                                    }
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(controleurMotif.dispose);
   }
 
   @override
   Widget build(BuildContext context) {
-    // On ne propose Accepter/Refuser que si le rendez-vous est en attente.
-    final enAttente = rdv.statut == StatutRendezVous.enAttente;
     // Date longue en français + année, ex : « Jeudi 15 octobre 2026 ».
-    final dateLongue = '${dateDuJour(rdv.date)} ${rdv.date.year}';
+    final dateLongue =
+        '${dateDuJour(widget.rdv.date)} ${widget.rdv.date.year}';
 
     // Pas d'AppBar Material : on construit l'en-tête de la maquette
     // (chevron de retour + titre + badge de statut) nous-mêmes.
     return Scaffold(
-      backgroundColor: AppColors.fond,
+      backgroundColor: MaquetteCouleurs.fond,
       body: SafeArea(
         child: Column(
           children: [
             // ── En-tête : retour + titre + badge statut ──────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
+              padding: const EdgeInsets.fromLTRB(4, 6, 20, 4),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.chevron_left,
-                      size: 28,
-                      color: AppColors.navy,
+                  SizedBox(
+                    width: maquetteCibleMin,
+                    height: maquetteCibleMin,
+                    child: IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.chevron_left,
+                        size: 28,
+                        color: MaquetteCouleurs.texte,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 2),
@@ -255,13 +485,13 @@ class DetailRendezVousMedecin extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 19,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
+                        color: MaquetteCouleurs.texte,
                       ),
                     ),
                   ),
-                  PastilleStatut(statut: rdv.statut),
+                  PastilleStatutSpec(statut: widget.rdv.statut),
                 ],
               ),
             ),
@@ -269,23 +499,31 @@ class DetailRendezVousMedecin extends StatelessWidget {
             // ── Contenu défilant ──────────────────────────────────────
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
-                  _carteInfo(dateLongue),
-                  if (rdv.statut == StatutRendezVous.refuse &&
-                      rdv.motifRefus != null &&
-                      rdv.motifRefus!.isNotEmpty) ...[
+                  _cartePatient(dateLongue),
+                  if (widget.rdv.statut == StatutRendezVous.refuse &&
+                      widget.rdv.motifRefus != null &&
+                      widget.rdv.motifRefus!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _bandeauRefus(),
                   ],
                   const SizedBox(height: 16),
-                  _infosPatient(),
+                  _infosPatientCarte(),
                 ],
               ),
             ),
 
-            // ── Pied de boutons (seulement si en attente) ─────────────
-            if (enAttente) _piedActions(context),
+            // ── Pied de boutons fixe (tous statuts, cf. maquette) ─────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              decoration: const BoxDecoration(
+                color: MaquetteCouleurs.surface,
+                border: Border(top: BorderSide(color: MaquetteCouleurs.bordure)),
+              ),
+              child: _piedActions(),
+            ),
           ],
         ),
       ),
@@ -293,25 +531,20 @@ class DetailRendezVousMedecin extends StatelessWidget {
   }
 }
 
-// Ligne « libellé …… valeur » de la carte dégradée, précédée d'un filet.
+// Ligne « libellé …… valeur » de la carte patient, précédée d'un trait.
 class _LigneDetail extends StatelessWidget {
   final String libelle;
   final String valeur;
-  final bool separateur;
 
-  const _LigneDetail({
-    required this.libelle,
-    required this.valeur,
-    this.separateur = false,
-  });
+  const _LigneDetail({required this.libelle, required this.valeur});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (separateur)
-          Container(height: 1, color: AppColors.navy.withValues(alpha: 0.08)),
+        const SizedBox(height: 1),
+        Container(height: 1, color: MaquetteCouleurs.bordure),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 11),
           child: Row(
@@ -321,7 +554,7 @@ class _LigneDetail extends StatelessWidget {
                 libelle,
                 style: const TextStyle(
                   fontSize: 13,
-                  color: AppColors.texteFaible,
+                  color: MaquetteCouleurs.texteSecondaire,
                 ),
               ),
               const SizedBox(width: 12),
@@ -332,7 +565,7 @@ class _LigneDetail extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.navy,
+                    color: MaquetteCouleurs.texte,
                   ),
                 ),
               ),
@@ -344,8 +577,8 @@ class _LigneDetail extends StatelessWidget {
   }
 }
 
-// Ligne « pastille icône + libellé + valeur » de la carte patient,
-// précédée d'un filet gris.
+// Ligne « pastille icône 36 px + libellé + valeur » de la carte
+// « Informations du patient », séparée par un filet.
 class _LignePatient extends StatelessWidget {
   final IconData icone;
   final Color fond;
@@ -363,19 +596,20 @@ class _LignePatient extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final nonRenseigne = valeur == 'Non renseigné';
     return Column(
       children: [
-        Container(height: 1, color: AppColors.trait),
+        Container(height: 1, color: MaquetteCouleurs.bordure),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 11),
           child: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: fond, shape: BoxShape.circle),
-                child: Icon(icone, size: 19, color: couleur),
+                child: Icon(icone, size: 18, color: couleur),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -386,16 +620,18 @@ class _LignePatient extends StatelessWidget {
                       libelle,
                       style: const TextStyle(
                         fontSize: 12.5,
-                        color: AppColors.texteFaible,
+                        color: MaquetteCouleurs.texteSecondaire,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       valeur,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.navy,
+                        color: nonRenseigne
+                            ? MaquetteCouleurs.texteSecondaire
+                            : MaquetteCouleurs.texte,
                       ),
                     ),
                   ],

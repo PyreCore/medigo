@@ -28,7 +28,19 @@ class EspaceMedecin extends StatefulWidget {
   // fonctions font vraiment (Firestore ou démo), il les fait passer.
   final Future<void> Function()? onRafraichir;
   final Future<void> Function(RendezVous rdv)? onAccepterRendezVous;
-  final Future<void> Function(RendezVous rdv)? onRefuserRendezVous;
+
+  /// Refus AVEC motif (obligatoire dans le panneau du bas du détail).
+  final Future<void> Function(RendezVous rdv, String motif)?
+      onRefuserRendezVous;
+
+  /// Passe un rendez-vous confirmé au statut « terminé ».
+  final Future<void> Function(RendezVous rdv)? onTerminerRendezVous;
+
+  /// Bannière « Nouveau rendez-vous » de l'accueil (détectée par le
+  /// chargeur toutes les 5 s), et son rappel de fermeture.
+  final ({String titre, String sousTitre})? notificationRdv;
+  final VoidCallback? onFermerNotificationRdv;
+
   final VoidCallback? onDeconnexion;
 
   const EspaceMedecin({
@@ -37,9 +49,12 @@ class EspaceMedecin extends StatefulWidget {
     required this.rendezVousDuJour,
     this.enAttente = 0,
     this.patientsSuivis = 0,
+    this.notificationRdv,
+    this.onFermerNotificationRdv,
     this.onRafraichir,
     this.onAccepterRendezVous,
     this.onRefuserRendezVous,
+    this.onTerminerRendezVous,
     this.onDeconnexion,
   });
 
@@ -67,6 +82,9 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
       routeMedigo(
         builder: (_) => DetailRendezVousMedecin(
           rdv: rdv,
+          // Spécialité du médecin connecté : affichée dans le sous-titre
+          // de la carte patient (« Consultation de suivi · Cardiologie »).
+          specialiteMedecin: widget.medecin.specialite,
           // Si le parent n'a pas fourni la fonction, on transmet null
           // (bouton désactivé dans le détail). Sinon, on l'appelle avec
           // le "rdv" concerné au moment du clic.
@@ -75,7 +93,10 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
               : () => widget.onAccepterRendezVous!(rdv),
           onRefuser: widget.onRefuserRendezVous == null
               ? null
-              : () => widget.onRefuserRendezVous!(rdv),
+              : (motif) => widget.onRefuserRendezVous!(rdv, motif),
+          onTerminer: widget.onTerminerRendezVous == null
+              ? null
+              : () => widget.onTerminerRendezVous!(rdv),
         ),
       ),
     );
@@ -90,6 +111,8 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
         rendezVousDuJour: widget.rendezVousDuJour,
         enAttente: widget.enAttente,
         patientsSuivis: widget.patientsSuivis,
+        notificationRdv: widget.notificationRdv,
+        onFermerNotificationRdv: widget.onFermerNotificationRdv,
         onRafraichir: widget.onRafraichir,
         // Changement d'onglet sans nouvelle route : setState redessine.
         onVoirTout: () => setState(() => _ongletActif = 1),

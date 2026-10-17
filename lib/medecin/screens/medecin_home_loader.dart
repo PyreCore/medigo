@@ -40,6 +40,18 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
   /// à chaque rechargement et afficher une notification.
   Set<String> _anciensIds = {};
 
+  /// Bannière « Nouveau rendez-vous » de l'accueil (maquette §4.1).
+  /// null = rien à afficher. Remontée jusqu'à AccueilMedecin, qui la
+  /// ferme via [_fermerNotification].
+  ({String titre, String sousTitre})? _notificationRdv;
+
+  /// Appelé par l'accueil quand l'utilisateur ferme la bannière
+  /// (croix) : on vide l'état pour que la pastille rouge de la cloche
+  /// disparaisse aussi.
+  void _fermerNotification() {
+    if (mounted) setState(() => _notificationRdv = null);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -79,22 +91,33 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
         final idsActuels = rendezVous.map((r) => r.id).toSet();
         final nouveaux = idsActuels.difference(_anciensIds);
 
+        // Bannière « Nouveau rendez-vous » (maquette §4.1) : on prend le
+        // premier rendez-vous inédit pour composer le sous-titre
+        // « Alice Mba · 10:30 ».
+        ({String titre, String sousTitre})? notification;
+        if (_anciensIds.isNotEmpty && nouveaux.isNotEmpty) {
+          final premierNouveau = rendezVous.firstWhere(
+            (r) => nouveaux.contains(r.id),
+            orElse: () => rendezVous.first,
+          );
+          notification = (
+            titre: nouveaux.length == 1
+                ? 'Nouveau rendez-vous'
+                : '${nouveaux.length} nouveaux rendez-vous',
+            sousTitre:
+                '${premierNouveau.patientNomComplet} · ${premierNouveau.heure}',
+          );
+        }
+
         setState(() {
           _medecin = medecin;
           _rendezVous = rendezVous;
           _stats = stats;
+          // On ne réécrit la bannière QUE s'il y a une nouveauté :
+          // un rechargement « vide » ne doit pas effacer une bannière
+          // que l'utilisateur n'a pas encore fermée.
+          if (notification != null) _notificationRdv = notification;
         });
-
-        // Notification si de nouveaux RDV sont arrivés
-        // (uniquement après le chargement initial).
-        if (_anciensIds.isNotEmpty && nouveaux.isNotEmpty) {
-          messageFlash(
-            context,
-            nouveaux.length == 1
-                ? 'Nouveau rendez-vous'
-                : '${nouveaux.length} nouveaux rendez-vous',
-          );
-        }
 
         // On mémorise les IDs actuels pour le prochain rechargement.
         _anciensIds = idsActuels;
@@ -114,10 +137,18 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
     if (mounted) messageFlash(context, 'Rendez-vous confirmé');
   }
 
-  Future<void> _refuser(RendezVous rdv) async {
-    await _service.refuserRendezVous(rdv.id);
+  Future<void> _refuser(RendezVous rdv, String motif) async {
+    // Le motif est transmis au service : il est visible par le patient
+    // (bandeau « Motif du refus » dans le détail, côté patient).
+    await _service.refuserRendezVous(rdv.id, motif: motif);
     await _charger();
     if (mounted) messageFlash(context, 'Rendez-vous refusé');
+  }
+
+  Future<void> _terminer(RendezVous rdv) async {
+    await _service.terminerRendezVous(rdv.id);
+    await _charger();
+    if (mounted) messageFlash(context, 'Consultation terminée');
   }
 
   Future<void> _deconnexion() async {
@@ -194,9 +225,12 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       rendezVousDuJour: _rendezVous,
       enAttente: _stats['enAttente'] ?? 0,
       patientsSuivis: _stats['patientsSuivis'] ?? 0,
+      notificationRdv: _notificationRdv,
+      onFermerNotificationRdv: _fermerNotification,
       onRafraichir: _charger,
       onAccepterRendezVous: _accepter,
       onRefuserRendezVous: _refuser,
+      onTerminerRendezVous: _terminer,
       onDeconnexion: _deconnexion,
     );
   }

@@ -14,7 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import '../../models/medecin.dart';
-import '../../theme/medigo_theme.dart';
+import '../../theme/maquette_tokens.dart';
+import '../../widgets/maquette_widgets.dart';
 import '../../widgets/ui_kit.dart';
 
 class ProfilMedecin extends StatefulWidget {
@@ -133,15 +134,13 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
         // ── Carte d'identité + photo ─────────────────────────────
         Apparition(
           delaiMs: 0,
-          child: CarteMedigo(
+          child: CarteSpec(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
             child: Column(
               children: [
                 CircleAvatar(
                   radius: 46,
-                  backgroundColor: AppColors.bleuMedical.withValues(
-                    alpha: 0.10,
-                  ),
+                  backgroundColor: MaquetteCouleurs.bleuClair,
                   backgroundImage: imageProfil(_photo),
                   child: _photo == null
                       ? Text(
@@ -149,7 +148,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                           style: const TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.bleuMedical,
+                            color: MaquetteCouleurs.bleu,
                           ),
                         )
                       : null,
@@ -161,7 +160,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.texte,
+                    color: MaquetteCouleurs.texte,
                   ),
                 ),
                 // Sous-titres affichés UNIQUEMENT s'ils sont renseignés
@@ -174,7 +173,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.bleuMedical,
+                      color: MaquetteCouleurs.bleu,
                     ),
                   ),
                 ],
@@ -185,7 +184,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: AppColors.texteFaible,
+                      color: MaquetteCouleurs.texteSecondaire,
                     ),
                   ),
                 ],
@@ -200,7 +199,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.4,
-                          color: AppColors.bleuMedical,
+                          color: MaquetteCouleurs.bleu,
                         ),
                       ),
                       SizedBox(width: 10),
@@ -208,16 +207,17 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                         'Envoi de la photo…',
                         style: TextStyle(
                           fontSize: 13,
-                          color: AppColors.texteFaible,
+                          color: MaquetteCouleurs.texteSecondaire,
                         ),
                       ),
                     ],
                   )
                 else
-                  BoutonContour(
+                  // Libellé de la maquette (§4.5) : « Changer la photo ».
+                  BoutonContourSpec(
                     texte: _photo == null
                         ? 'Ajouter une photo'
-                        : 'Changer de photo',
+                        : 'Changer la photo',
                     onPressed: _choisirPhoto,
                   ),
               ],
@@ -255,9 +255,9 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
         // ── Déconnexion (contour rouge, pleine largeur) ──────────
         Apparition(
           delaiMs: 200,
-          child: BoutonContour(
+          child: BoutonContourSpec(
             texte: 'Se déconnecter',
-            couleur: AppColors.rouge,
+            couleur: MaquetteCouleurs.refuseTexte,
             hauteur: 48,
             pleineLargeur: true,
             onPressed: widget.onDeconnexion,
@@ -279,7 +279,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
         style: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w800,
-          color: AppColors.texte,
+          color: MaquetteCouleurs.texte,
         ),
       ),
       const SizedBox(height: 4),
@@ -297,7 +297,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                   infos[i].$1,
                   style: const TextStyle(
                     fontSize: 13,
-                    color: AppColors.texteFaible,
+                    color: MaquetteCouleurs.texteSecondaire,
                   ),
                 ),
               ),
@@ -311,7 +311,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.texte,
+                    color: MaquetteCouleurs.texte,
                   ),
                 ),
               ),
@@ -320,7 +320,7 @@ class _ProfilMedecinState extends State<ProfilMedecin> {
         ),
       );
     }
-    return CarteMedigo(
+    return CarteSpec(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

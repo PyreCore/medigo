@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/medecin.dart';
 import '../../models/disponibilite.dart';
 import '../../services/disponibilite_service.dart';
-import '../../theme/medigo_theme.dart';
+import '../../theme/maquette_tokens.dart';
+import '../../widgets/maquette_widgets.dart';
 import '../../widgets/ui_kit.dart';
 
 /// Onglet "Disponibilités" : le médecin CONSULTE ses plages horaires.
@@ -89,38 +90,41 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
-                color: AppColors.navy,
+                color: MaquetteCouleurs.texte,
               ),
             ),
             SizedBox(height: 4),
             Text(
               'Vos horaires de consultation',
-              style: TextStyle(fontSize: 14, color: AppColors.texteFaible),
+              style: TextStyle(
+                fontSize: 14,
+                color: MaquetteCouleurs.texteSecondaire,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 16),
 
-        // ── Bandeau « Lecture seule » (maquette) ─────────────────
+        // ── Bandeau « Lecture seule » (maquette §4.4) ─────────────────
         const BandeauInfo(
           icone: Icons.lock_outline,
           titre: 'Lecture seule',
           corps:
-              'Vos horaires sont gérés par la secrétaire de l\'hôpital. '
-              'Pour toute modification, contactez-la directement.',
+              'Vos horaires sont gérés et validés par le secrétariat. '
+              'Vous pouvez les consulter, pas les modifier.',
         ),
         const SizedBox(height: 16),
 
         // ── Carte des 7 jours (séparés par des filets) ──────────
-        CarteMedigo(
+        CarteSpec(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          rayon: Rayons.carte,
+          rayon: MaquetteRayons.carte,
           child: Column(
             children: [
               for (int jour = 1; jour <= 7; jour++) ...[
                 // Filet de séparation entre les jours (pas au-dessus du 1er).
                 if (jour > 1)
-                  Container(height: 1, color: AppColors.trait),
+                  Container(height: 1, color: MaquetteCouleurs.bordure),
                 _LigneJour(
                   jour: jour,
                   // On n'affiche QUE les plages actives : une plage inactive
@@ -135,10 +139,11 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
         ),
         const SizedBox(height: 12),
 
-        // ── Durée d'une consultation (maquette) ──────────────────
-        CarteMedigo(
+        // ── Durée d'une consultation (maquette §4.4 : « 30 min » fixe,
+        //    sans sélecteur — cf. écart noté, pas de durée persistée) ──
+        CarteSpec(
           padding: const EdgeInsets.all(16),
-          rayon: Rayons.carte,
+          rayon: MaquetteRayons.carte,
           child: Row(
             children: [
               const Expanded(
@@ -147,7 +152,7 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.navy,
+                    color: MaquetteCouleurs.texte,
                   ),
                 ),
               ),
@@ -156,7 +161,7 @@ class _DisponibilitesMedecinState extends State<DisponibilitesMedecin> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.bleuVif,
+                  color: MaquetteCouleurs.bleu,
                 ),
               ),
             ],
@@ -182,22 +187,25 @@ class _LigneJour extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // Nom du jour, à gauche.
+          // Nom du jour, à gauche (15 px poids 700, maquette §4.4).
           Expanded(
             child: Text(
               Disponibilite.nomJour(jour),
               style: const TextStyle(
-                fontSize: 14.5,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: AppColors.navy,
+                color: MaquetteCouleurs.texte,
               ),
             ),
           ),
-          // À droite : les plages, ou « Indisponible ».
+          // À droite : pastille unique « début à fin », ou « Indisponible ».
           if (plages.isEmpty)
             const Text(
               'Indisponible',
-              style: TextStyle(fontSize: 13.5, color: AppColors.texteFaible),
+              style: TextStyle(
+                fontSize: 13.5,
+                color: MaquetteCouleurs.texteSecondaire,
+              ),
             )
           else
             Flexible(
@@ -209,23 +217,7 @@ class _LigneJour extends StatelessWidget {
                 alignment: WrapAlignment.end,
                 children: plages
                     .map(
-                      (p) => Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PastilleHeure(heure: p.heureDebut),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 2),
-                            child: Text(
-                              'à',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.texteFaible,
-                              ),
-                            ),
-                          ),
-                          _PastilleHeure(heure: p.heureFin),
-                        ],
-                      ),
+                      (p) => _PastilleHeurePlage(debut: p.heureDebut, fin: p.heureFin),
                     )
                     .toList(),
               ),
@@ -236,26 +228,28 @@ class _LigneJour extends StatelessWidget {
   }
 }
 
-/// Pastille d'heure des disponibilités : fond bleu clair, heure navy gras.
-class _PastilleHeure extends StatelessWidget {
-  final String heure;
+/// Pastille d'une plage horaire : « 08:00 à 16:00 » sur une seule pilule,
+/// fond bleu clair #E8EFFD, texte bleu #2458D3 (maquette §4.4).
+class _PastilleHeurePlage extends StatelessWidget {
+  final String debut;
+  final String fin;
 
-  const _PastilleHeure({required this.heure});
+  const _PastilleHeurePlage({required this.debut, required this.fin});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.bleuClair,
+        color: MaquetteCouleurs.bleuClair,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        heure,
+        '$debut à $fin',
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
-          color: AppColors.navy,
+          color: MaquetteCouleurs.bleu,
         ),
       ),
     );
