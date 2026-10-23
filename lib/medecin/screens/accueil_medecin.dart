@@ -27,8 +27,11 @@ class AccueilMedecin extends StatefulWidget {
   final String? photoUrl;
 
   final List<RendezVous> rendezVousDuJour;
-  final int enAttente;
   final int patientsSuivis;
+
+  /// Ids des consultations marquées « non terminées » : les cartes
+  /// affichent la pastille « Non terminé » (style neutre).
+  final Set<String> idsNonTermines;
 
   /// Bannière « Nouveau rendez-vous » remontée par le chargeur
   /// (null = rien à afficher).
@@ -49,8 +52,8 @@ class AccueilMedecin extends StatefulWidget {
     required this.medecin,
     this.photoUrl,
     required this.rendezVousDuJour,
-    this.enAttente = 0,
     this.patientsSuivis = 0,
+    this.idsNonTermines = const {},
     this.notificationRdv,
     this.onFermerNotificationRdv,
     required this.onVoirTout,
@@ -216,18 +219,25 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
     final finJour = debutJour.add(const Duration(days: 1));
 
     // Rendez-vous du JOUR (la section s'appelle « Rendez-vous
-    // d'aujourd'hui » : on filtre sur la journée, comme le laissait
-    // prévoir le commentaire du chargeur).
+    // d'aujourd'hui » : on filtre sur la journée). La liste reçue ne
+    // contient que des rendez-vous CONFIRMÉS et TERMINÉS (filtre fait
+    // par le chargeur) : le compteur suit la même règle que la liste.
     final duJour = widget.rendezVousDuJour
         .where((r) => !r.date.isBefore(debutJour) && r.date.isBefore(finJour))
         .toList();
 
-    // Prochain rendez-vous « à venir » (en attente ou confirmé), le plus
-    // proche dans le temps ; à défaut, le premier en attente/confirmé.
+    // « À venir » : les prochains rendez-vous visibles (confirmés) à
+    // venir. Remplace l'ancienne tuile « En attente » : le médecin ne
+    // voit plus les rendez-vous en attente (arbitrage du point 3).
+    final aVenir = widget.rendezVousDuJour
+        .where((r) => r.dateHeure.isAfter(maintenant))
+        .length;
+
+    // Prochain rendez-vous CONFIRMÉ à venir ; à défaut, rien (les
+    // rendez-vous en attente sont gérés par la secrétaire).
     RendezVous? prochain;
     for (final rdv in widget.rendezVousDuJour) {
-      if ((rdv.statut == StatutRendezVous.enAttente ||
-              rdv.statut == StatutRendezVous.confirme) &&
+      if (rdv.statut == StatutRendezVous.confirme &&
           rdv.dateHeure.isAfter(maintenant)) {
         prochain = rdv;
         break;
@@ -255,6 +265,8 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
               delaiMs: 160 + (entree.key * 60),
               child: CarteRdvTableauSpec(
                 rdv: entree.value,
+                nonTermine:
+                    widget.idsNonTermines.contains(entree.value.id),
                 onTap: () => widget.onTapRendezVous(entree.value),
               ),
             ),
@@ -354,8 +366,8 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
                   icone: Icons.schedule,
                   couleurIcone: MaquetteCouleurs.attenteTexte,
                   fondPastel: MaquetteCouleurs.attenteFond,
-                  valeur: widget.enAttente.toString(),
-                  libelle: 'En attente',
+                  valeur: aVenir.toString(),
+                  libelle: 'À venir',
                 ),
               ),
               const SizedBox(width: 10),

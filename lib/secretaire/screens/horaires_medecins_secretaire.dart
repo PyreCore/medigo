@@ -23,6 +23,7 @@ import '../../models/medecin.dart';
 import '../../models/disponibilite.dart';
 import '../../services/disponibilite_service.dart';
 import '../../theme/medigo_theme.dart';
+import '../../theme/maquette_tokens.dart';
 import '../../widgets/ui_kit.dart';
 
 class HorairesMedecinsSecretaire extends StatefulWidget {
@@ -93,107 +94,57 @@ class _HorairesMedecinsSecretaireState
     final medecin = _medecinChoisi;
     if (medecin == null) return;
 
-    final plage = await _demanderPlage(context, jour: jour);
-    if (plage == null || !mounted) return;
-
-    await _service.enregistrer(
-      Disponibilite(
-        id: '',
-        medecinId: medecin.id,
-        jour: jour,
-        heureDebut: plage.debut,
-        heureFin: plage.fin,
-      ),
-    );
-    await _charger();
-  }
-
-  /// Boîte de dialogue de saisie d'une plage (pré-remplie si modification).
-  /// Renvoie null si l'utilisateur annule.
-  Future<_Plage?> _demanderPlage(
-    BuildContext context, {
-    required int jour,
-    _Plage? existante,
-  }) async {
-    TimeOfDay debut =
-        existante == null
-            ? const TimeOfDay(hour: 8, minute: 0)
-            : _versTimeOfDay(existante.debut);
-    TimeOfDay fin =
-        existante == null
-            ? const TimeOfDay(hour: 16, minute: 0)
-            : _versTimeOfDay(existante.fin);
-
-    final valide = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          title: Text(
-            existante == null
-                ? 'Ajouter — ${Disponibilite.nomJour(jour)}'
-                : 'Modifier — ${Disponibilite.nomJour(jour)}',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Ligne « Heure de début » : texte seul, pas d'icône.
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Heure de début'),
-                trailing: Text(
-                  debut.format(context),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                onTap: () async {
-                  final choix = await showTimePicker(
-                    context: context,
-                    initialTime: debut,
-                  );
-                  if (choix != null) setStateDialog(() => debut = choix);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Heure de fin'),
-                trailing: Text(
-                  fin.format(context),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                onTap: () async {
-                  final choix = await showTimePicker(
-                    context: context,
-                    initialTime: fin,
-                  );
-                  if (choix != null) setStateDialog(() => fin = choix);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.bleuVif,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Valider'),
-            ),
-          ],
+    final plage = await _demanderPlage(
+      context,
+      jour: jour,
+      // L'écriture Firestore se fait DANS la boîte de dialogue : elle
+      // y affiche son spinner et y conserve l'erreur si ça échoue.
+      onEnregistrer: (p) => _service.enregistrer(
+        Disponibilite(
+          id: '',
+          medecinId: medecin.id,
+          jour: jour,
+          heureDebut: p.debut,
+          heureFin: p.fin,
         ),
       ),
     );
+    if (plage == null || !mounted) return;
 
-    if (valide != true) return null;
+    await _charger();
+    // Retour visuel : petit message de succès en bas de l'écran.
+    _flash('Plage ajoutée — ${Disponibilite.nomJour(jour)}');
+  }
 
-    final debutTexte = _versTexte(debut);
-    final finTexte = _versTexte(fin);
-    // Les deux textes viennent de TimeOfDay via _versTexte, donc ils sont
-    // toujours au format "HH:mm" avec un zéro en tête : l'ordre
-    // alphabétique correspond alors à l'ordre horaire ("09:00" < "10:00").
-    if (debutTexte.compareTo(finTexte) >= 0) {
+  /// Boîte de dialogue de saisie d'une plage (pré-remplie si modification).
+  ///
+  /// L'ENREGISTREMENT se fait DANS la boîte ([onEnregistrer]) : elle
+  /// affiche son spinner pendant l'écriture Firestore et conserve
+  /// l'erreur si ça échoue. Renvoie null si l'utilisateur annule.
+  Future<_Plage?> _demanderPlage(
+    BuildContext context, {
+    required int jour,
+    required Future<void> Function(_Plage plage) onEnregistrer,
+    _Plage? existante,
+  }) async {
+    final resultat = await showDialog<_Plage>(
+      context: context,
+      builder: (_) => _DialoguePlage(
+        titre: existante == null
+            ? 'Ajouter — ${Disponibilite.nomJour(jour)}'
+            : 'Modifier — ${Disponibilite.nomJour(jour)}',
+        existante: existante,
+        onEnregistrer: onEnregistrer,
+      ),
+    );
+    if (resultat == null) return null;
+
+    // Garde de sécurité : la règle « fin > début » est déjà validée EN
+    // DIRECT dans la boîte (bouton « Valider » désactivé), mais on
+    // revérifie ici, juste avant l'appel du service. Les textes viennent
+    // de _versTexte ("HH:mm" zéro en tête) : l'ordre alphabétique =
+    // l'ordre horaire ("09:00" < "10:00").
+    if (resultat.debut.compareTo(resultat.fin) >= 0) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -203,8 +154,7 @@ class _HorairesMedecinsSecretaireState
       }
       return null;
     }
-
-    return _Plage(debut: debutTexte, fin: finTexte);
+    return resultat;
   }
 
   Future<void> _modifier(Disponibilite plage) async {
@@ -212,25 +162,29 @@ class _HorairesMedecinsSecretaireState
       context,
       jour: plage.jour,
       existante: _Plage(debut: plage.heureDebut, fin: plage.heureFin),
+      // L'écriture Firestore se fait DANS la boîte de dialogue.
+      onEnregistrer: (p) => _service.enregistrer(
+        Disponibilite(
+          id: plage.id,
+          medecinId: plage.medecinId,
+          jour: plage.jour,
+          heureDebut: p.debut,
+          heureFin: p.fin,
+          actif: plage.actif,
+        ),
+      ),
     );
     if (nouvelle == null || !mounted) return;
 
-    await _service.enregistrer(
-      Disponibilite(
-        id: plage.id,
-        medecinId: plage.medecinId,
-        jour: plage.jour,
-        heureDebut: nouvelle.debut,
-        heureFin: nouvelle.fin,
-        actif: plage.actif,
-      ),
-    );
     await _charger();
+    _flash('Plage modifiée — ${Disponibilite.nomJour(plage.jour)}');
   }
 
   Future<void> _supprimer(Disponibilite plage) async {
     await _service.supprimer(plage.id);
+    if (!mounted) return;
     await _charger();
+    _flash('Plage supprimée — ${Disponibilite.nomJour(plage.jour)}');
   }
 
   /// VALIDATION d'un créneau : active ou désactive la plage sans la
@@ -247,17 +201,57 @@ class _HorairesMedecinsSecretaireState
         actif: !plage.actif,
       ),
     );
+    if (!mounted) return;
     await _charger();
+    _flash(
+      '${plage.actif ? 'Créneau désactivé' : 'Créneau activé'} — '
+      '${Disponibilite.nomJour(plage.jour)}',
+    );
   }
 
-  static String _versTexte(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  /// Petit retour de succès en bas d'écran (flottant, bleu maquette).
+  void _flash(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: MaquetteCouleurs.bleu,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
 
-  static TimeOfDay _versTimeOfDay(String hhmm) {
-    final morceaux = hhmm.split(':');
-    return TimeOfDay(
-      hour: int.tryParse(morceaux.first) ?? 0,
-      minute: morceaux.length > 1 ? (int.tryParse(morceaux[1]) ?? 0) : 0,
+  /// Entrée en fondu + glissement d'une carte de jour, décalée par
+  /// index (stagger lundi → dimanche). La colonne parente porte une
+  /// clé ValueKey(médecin) : changer de médecin reconstruit les cartes
+  /// et REJOUE cette entrée.
+  Widget _animeCarte(int index, Widget enfant) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 450),
+      curve: Interval(
+        0.08 * index,
+        // Borné à 1 : Interval exige end <= 1 (dernière carte).
+        (0.08 * index + 0.6).clamp(0.0, 1.0).toDouble(),
+        curve: Curves.easeOutCubic,
+      ),
+      builder: (context, valeur, enfant) => Opacity(
+        opacity: valeur.clamp(0.0, 1.0).toDouble(),
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - valeur)),
+          child: enfant,
+        ),
+      ),
+      child: enfant,
     );
   }
 
@@ -369,15 +363,26 @@ class _HorairesMedecinsSecretaireState
             ),
           )
         else
-          for (int jour = 1; jour <= 7; jour++)
-            _CarteJour(
-              jour: jour,
-              plages: _plages.where((p) => p.jour == jour).toList(),
-              onAjouter: () => _ajouter(jour),
-              onModifier: _modifier,
-              onSupprimer: _supprimer,
-              onBasculer: _basculer,
-            ),
+          Column(
+            // Clé = médecin : changer de médecin reconstruit la
+            // colonne et rejoue l'entrée fondu + glissement des cartes.
+            key: ValueKey(_medecinChoisi?.id),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int jour = 1; jour <= 7; jour++)
+                _animeCarte(
+                  jour - 1,
+                  _CarteJour(
+                    jour: jour,
+                    plages: _plages.where((p) => p.jour == jour).toList(),
+                    onAjouter: () => _ajouter(jour),
+                    onModifier: _modifier,
+                    onSupprimer: _supprimer,
+                    onBasculer: _basculer,
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
@@ -597,4 +602,276 @@ class _Plage {
   final String fin;
 
   const _Plage({required this.debut, required this.fin});
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Boîte de dialogue « Ajouter / Modifier une plage » — maquette :
+//  · validation EN DIRECT : « La fin doit être après le début » sous
+//    l'heure de fin, bouton « Valider » désactivé tant que l'ordre est
+//    invalide ;
+//  · spinner pendant l'enregistrement Firestore (l'erreur reste dans
+//    la boîte si ça échoue, on ne la referme pas) ;
+//  · lignes en fondu + glissement (stagger), heures en bleu #2458D3.
+// ─────────────────────────────────────────────────────────────────────
+class _DialoguePlage extends StatefulWidget {
+  final String titre;
+  final _Plage? existante;
+  final Future<void> Function(_Plage plage) onEnregistrer;
+
+  const _DialoguePlage({
+    required this.titre,
+    required this.onEnregistrer,
+    this.existante,
+  });
+
+  @override
+  State<_DialoguePlage> createState() => _DialoguePlageState();
+}
+
+class _DialoguePlageState extends State<_DialoguePlage>
+    with SingleTickerProviderStateMixin {
+  late TimeOfDay _debut =
+      widget.existante == null
+          ? const TimeOfDay(hour: 8, minute: 0)
+          : _versTimeOfDay(widget.existante!.debut);
+  late TimeOfDay _fin =
+      widget.existante == null
+          ? const TimeOfDay(hour: 16, minute: 0)
+          : _versTimeOfDay(widget.existante!.fin);
+
+  bool _envoi = false;
+  String? _erreurEnvoi;
+
+  // Animation d'ENTRÉE des deux lignes (fondu + glissement).
+  late final AnimationController _entree = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  )..forward();
+
+  @override
+  void dispose() {
+    _entree.dispose();
+    super.dispose();
+  }
+
+  /// Règle de validation EN DIRECT : la fin doit être APRÈS le début.
+  bool get _ordreValide => _versTexte(_debut).compareTo(_versTexte(_fin)) < 0;
+
+  Future<void> _choisir(bool estDebut) async {
+    final choix = await showTimePicker(
+      context: context,
+      initialTime: estDebut ? _debut : _fin,
+    );
+    if (choix != null && mounted) {
+      setState(() {
+        if (estDebut) {
+          _debut = choix;
+        } else {
+          _fin = choix;
+        }
+      });
+    }
+  }
+
+  Future<void> _valider() async {
+    if (_envoi || !_ordreValide) return;
+    setState(() {
+      _envoi = true;
+      _erreurEnvoi = null;
+    });
+    final plage = _Plage(debut: _versTexte(_debut), fin: _versTexte(_fin));
+    try {
+      // On ATTEND réellement l'écriture Firestore : spinner pendant
+      // l'envoi, et l'erreur reste affichée ici si ça échoue.
+      await widget.onEnregistrer(plage);
+      if (!mounted) return;
+      Navigator.pop(context, plage);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _envoi = false;
+        _erreurEnvoi = 'Enregistrement impossible — réessayez.';
+      });
+    }
+  }
+
+  Widget _anime(int index, Widget enfant) {
+    final interval = Interval(
+      0.2 * index,
+      // Borné à 1 : Interval exige end <= 1.
+      (0.2 * index + 0.6).clamp(0.0, 1.0).toDouble(),
+      curve: Curves.easeOutCubic,
+    );
+    final anim = _entree.drive(CurveTween(curve: interval));
+    return FadeTransition(
+      opacity: anim,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(anim),
+        child: enfant,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: MaquetteCouleurs.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(MaquetteRayons.carte),
+      ),
+      title: Text(
+        widget.titre,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: MaquetteCouleurs.texte,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ligne « Heure de début » : texte seul, pas d'icône.
+          _anime(0, _ligneHeure('Heure de début', _debut, () => _choisir(true))),
+          const SizedBox(height: 4),
+          // « Heure de fin » : message d'erreur EN DIRECT si l'ordre
+          // des heures est invalide.
+          _anime(
+            1,
+            _ligneHeure(
+              'Heure de fin',
+              _fin,
+              () => _choisir(false),
+              erreur:
+                  _ordreValide ? null : 'La fin doit être après le début',
+            ),
+          ),
+          if (_erreurEnvoi != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _erreurEnvoi!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: MaquetteCouleurs.refuseTexte,
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _envoi ? null : () => Navigator.pop(context),
+          child: const Text(
+            'Annuler',
+            style: TextStyle(color: MaquetteCouleurs.texteSecondaire),
+          ),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: MaquetteCouleurs.bleu,
+            disabledBackgroundColor: const Color(0xFFD7DCE8),
+          ),
+          // Désactivé pendant l'envoi OU si l'ordre est invalide
+          // (validation en direct).
+          onPressed: (_envoi || !_ordreValide) ? null : _valider,
+          child: _envoi
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'Valider',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// Une ligne « Heure de début/fin » : libellé + heure cliquable
+  /// (carte maquette, heure en bleu #2458D3), avec l'erreur éventuelle.
+  Widget _ligneHeure(
+    String libelle,
+    TimeOfDay heure,
+    VoidCallback onTap, {
+    String? erreur,
+  }) {
+    const rayon = BorderRadius.all(Radius.circular(12));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: rayon,
+          onTap: _envoi ? null : onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: MaquetteCouleurs.fond,
+              borderRadius: rayon,
+              border: Border.all(
+                color: erreur == null
+                    ? MaquetteCouleurs.bordure
+                    : MaquetteCouleurs.refuseTexte,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    libelle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: MaquetteCouleurs.texte,
+                    ),
+                  ),
+                ),
+                Text(
+                  heure.format(context),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: MaquetteCouleurs.bleu,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (erreur != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Text(
+              erreur,
+              style: const TextStyle(
+                fontSize: 12,
+                color: MaquetteCouleurs.refuseTexte,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  static String _versTexte(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:'
+      '${t.minute.toString().padLeft(2, '0')}';
+
+  static TimeOfDay _versTimeOfDay(String hhmm) {
+    final morceaux = hhmm.split(':');
+    return TimeOfDay(
+      hour: int.tryParse(morceaux.first) ?? 0,
+      minute: morceaux.length > 1 ? (int.tryParse(morceaux[1]) ?? 0) : 0,
+    );
+  }
 }

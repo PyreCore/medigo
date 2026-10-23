@@ -19,22 +19,27 @@ import 'profil_medecin.dart';
 class EspaceMedecin extends StatefulWidget {
   // Toutes les données reçues "d'en haut" (via le chargeur d'écran).
   final Medecin medecin;
+
+  /// Rendez-vous visibles du médecin (CONFIRMÉS et TERMINÉS seulement) :
+  /// le chargeur applique la règle d'affichage avant de les transmettre.
   final List<RendezVous> rendezVousDuJour;
-  final int enAttente;
   final int patientsSuivis;
 
   // Callbacks optionnels transmis plus loin aux écrans enfants.
   // EspaceMedecin ne fait qu'un "relais" : il ne sait pas CE QUE ces
   // fonctions font vraiment (Firestore ou démo), il les fait passer.
   final Future<void> Function()? onRafraichir;
-  final Future<void> Function(RendezVous rdv)? onAccepterRendezVous;
-
-  /// Refus AVEC motif (obligatoire dans le panneau du bas du détail).
-  final Future<void> Function(RendezVous rdv, String motif)?
-      onRefuserRendezVous;
 
   /// Passe un rendez-vous confirmé au statut « terminé ».
   final Future<void> Function(RendezVous rdv)? onTerminerRendezVous;
+
+  /// Marque la consultation comme NON terminée (statut « terminé » +
+  /// drapeau consultationTerminee = false côté service).
+  final Future<void> Function(RendezVous rdv)? onNonTermineRendezVous;
+
+  /// Ids des consultations marquées « non terminées » (statut terminé +
+  /// drapeau) : les écrans affichent « Non terminé » en style neutre.
+  final Set<String> idsNonTermines;
 
   /// Bannière « Nouveau rendez-vous » de l'accueil (détectée par le
   /// chargeur toutes les 5 s), et son rappel de fermeture.
@@ -47,14 +52,13 @@ class EspaceMedecin extends StatefulWidget {
     super.key,
     required this.medecin,
     required this.rendezVousDuJour,
-    this.enAttente = 0,
     this.patientsSuivis = 0,
+    this.idsNonTermines = const {},
     this.notificationRdv,
     this.onFermerNotificationRdv,
     this.onRafraichir,
-    this.onAccepterRendezVous,
-    this.onRefuserRendezVous,
     this.onTerminerRendezVous,
+    this.onNonTermineRendezVous,
     this.onDeconnexion,
   });
 
@@ -85,18 +89,19 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
           // Spécialité du médecin connecté : affichée dans le sous-titre
           // de la carte patient (« Consultation de suivi · Cardiologie »).
           specialiteMedecin: widget.medecin.specialite,
+          // Déjà marquée « non terminée » ? Le pied affiche alors un
+          // bloc neutre au lieu des boutons Terminer / Non terminé.
+          consultationNonTerminee:
+              widget.idsNonTermines.contains(rdv.id),
           // Si le parent n'a pas fourni la fonction, on transmet null
           // (bouton désactivé dans le détail). Sinon, on l'appelle avec
           // le "rdv" concerné au moment du clic.
-          onAccepter: widget.onAccepterRendezVous == null
-              ? null
-              : () => widget.onAccepterRendezVous!(rdv),
-          onRefuser: widget.onRefuserRendezVous == null
-              ? null
-              : (motif) => widget.onRefuserRendezVous!(rdv, motif),
           onTerminer: widget.onTerminerRendezVous == null
               ? null
               : () => widget.onTerminerRendezVous!(rdv),
+          onNonTermine: widget.onNonTermineRendezVous == null
+              ? null
+              : () => widget.onNonTermineRendezVous!(rdv),
         ),
       ),
     );
@@ -109,8 +114,8 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
         medecin: widget.medecin,
         photoUrl: _photo,
         rendezVousDuJour: widget.rendezVousDuJour,
-        enAttente: widget.enAttente,
         patientsSuivis: widget.patientsSuivis,
+        idsNonTermines: widget.idsNonTermines,
         notificationRdv: widget.notificationRdv,
         onFermerNotificationRdv: widget.onFermerNotificationRdv,
         onRafraichir: widget.onRafraichir,
@@ -121,6 +126,7 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
       ),
       ListeRendezVousMedecin(
         rendezVous: widget.rendezVousDuJour,
+        idsNonTermines: widget.idsNonTermines,
         onTapRendezVous: _ouvrirDetailRdv,
       ),
       // L'onglet Disponibilités a besoin de l'identité du médecin pour lire

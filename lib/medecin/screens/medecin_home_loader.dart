@@ -27,18 +27,28 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
   // Nullable : tant que les données ne sont pas arrivées, ces variables
   // valent null et on affiche un indicateur de chargement à la place.
   Medecin? _medecin;
-  List<RendezVous> _rendezVous = [];
+
+  /// Rendez-vous VISIBLES du médecin : confirmés et terminés seulement
+  /// (règle d'affichage du point 3). Le chargement complet reste
+  /// nécessaire pour la détection des notifications.
+  List<RendezVous> _rendezVousVisibles = [];
   Map<String, int> _stats = {};
+
+  /// Ids des consultations marquées « non terminées » (statut terminé +
+  /// drapeau consultationTerminee = false, cf. MedecinService) : les
+  /// écrans affichent « Non terminé » en style neutre.
+  Set<String> _idsNonTermines = {};
   String? _erreur;
 
   /// Timer qui recharge automatiquement les données toutes les 5 s.
   /// Permet au médecin de voir les nouveaux rendez-vous (confirmés
-  /// par la secrétaire, ou en attente) sans rafraîchir manuellement.
+  /// par la secrétaire) sans rafraîchir manuellement.
   Timer? _timerRafraichir;
 
-  /// Ancienne liste des IDs de RDV, pour détecter les nouveautés
-  /// à chaque rechargement et afficher une notification.
-  Set<String> _anciensIds = {};
+  /// Statuts précédents (id → statut), pour détecter les rendez-vous
+  /// qui DEVINENT visibles : nouveaux, ou confirmés par la secrétaire
+  /// depuis le dernier rechargement.
+  Map<String, StatutRendezVous> _anciensStatuts = {};
 
   /// Bannière « Nouveau rendez-vous » de l'accueil (maquette §4.1).
   /// null = rien à afficher. Remontée jusqu'à AccueilMedecin, qui la
@@ -81,68 +91,112 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       // dans l'écran d'accueil si besoin.
       final rendezVous = await _service.getTousRendezVous(medecin.id);
       final stats = await _service.getStatistiques(medecin.id);
+      // Drapeaux « consultation non terminée » (affichage « Non
+      // terminé » en style neutre dans les écrans).
+      final idsNonTermines =
+          await _service.getConsultationsNonTerminees(medecin.id);
 
       // On ne met à jour l'état qu'une seule fois, avec toutes les
       // données prêtes en même temps, plutôt que 3 fois séparément
       // (évite 2 reconstructions d'écran inutiles).
       if (mounted) {
-        // Détection de nouveaux rendez-vous : on compare les IDs
-        // actuels avec ceux du chargement précédent.
-        final idsActuels = rendezVous.map((r) => r.id).toSet();
-        final nouveaux = idsActuels.difference(_anciensIds);
+        // Règle d'affichage (point 3) : le médecin ne voit que SES
+        // rendez-vous CONFIRMÉS et TERMINÉS. Les en attente sont
+        // gérés par la secrétaire ; refusés/annulés ne le concernent
+        // plus. Le chargement complet reste utilisé pour les
+        // notifications (détection des RDV qui deviennent visibles).
+        bool visible(RendezVous r) =>
+            r.statut == StatutRendezVous.confirme ||
+            r.statut == StatutRendezVous.termine;
+        final visibles = rendezVous.where(visible).toList();
 
-        // Bannière « Nouveau rendez-vous » (maquette §4.1) : on prend le
-        // premier rendez-vous inédit pour composer le sous-titre
-        // « Alice Mba · 10:30 ».
+        // Rendez-vous qui DEVINNENT visibles depuis le dernier
+        // rechargement : soit ils viennent d'apparaître, soit la
+        // secrétaire vient de confirmer un rendez-vous que le médecin
+        // ne voyait pas encore.
+        bool etaitDejaVisible(RendezVous r) {
+          final ancien = _anciensStatuts[r.id];
+          return ancien == StatutRendezVous.confirme ||
+              ancien == StatutRendezVous.termine;
+        }
+
+        final devenusVisibles =
+            visibles.where((r) => !etaitDejaVisible(r)).toList();
+
+        // Détection des REFUS (point 4c) : un rendez-vous connu passe
+        // au statut « refusé » (la secrétaire refuse avec un motif).
+        // Le refus est invisible dans les listes du médecin : la
+        // bannière (et la pastille de la cloche, liée au même état)
+        // sont son seul moyen de le savoir. Transition uniquement :
+        // un refus déjà présent au premier chargement ne notifie pas.
+        final refuses = rendezVous
+            .where(
+              (r) =>
+                  r.statut == StatutRendezVous.refuse &&
+                  _anciensStatuts.containsKey(r.id) &&
+                  _anciensStatuts[r.id] != StatutRendezVous.refuse,
+            )
+            .toList();
+
+        // Bannière (maquette §4.1) — priorité au refus (actionnable),
+        // sinon « Nouveau rendez-vous » avec le premier RDV devenu
+        // visible : « Alice Mba · 10:30 ».
         ({String titre, String sousTitre})? notification;
-        if (_anciensIds.isNotEmpty && nouveaux.isNotEmpty) {
-          final premierNouveau = rendezVous.firstWhere(
-            (r) => nouveaux.contains(r.id),
-            orElse: () => rendezVous.first,
-          );
+        if (refuses.isNotEmpty) {
+          final refus = refuses.first;
+          // Le mapping de getTousRendezVous ne transporte pas
+          // motifRefus : lecture ciblée du motif (add-only).
+          final motif = await _service.getMotifRefus(refus.id);
           notification = (
-            titre: nouveaux.length == 1
+            titre: refuses.length == 1
+                ? 'Rendez-vous refusé'
+                : '${refuses.length} rendez-vous refusés',
+            sousTitre: motif == null
+                ? 'RDV de ${refus.patientNomComplet} refusé'
+                : 'RDV de ${refus.patientNomComplet} refusé : $motif',
+          );
+        } else if (_anciensStatuts.isNotEmpty && devenusVisibles.isNotEmpty) {
+          notification = (
+            titre: devenusVisibles.length == 1
                 ? 'Nouveau rendez-vous'
-                : '${nouveaux.length} nouveaux rendez-vous',
+                : '${devenusVisibles.length} nouveaux rendez-vous',
             sousTitre:
-                '${premierNouveau.patientNomComplet} · ${premierNouveau.heure}',
+                '${devenusVisibles.first.patientNomComplet} · '
+                '${devenusVisibles.first.heure}',
           );
         }
 
         setState(() {
           _medecin = medecin;
-          _rendezVous = rendezVous;
+          _rendezVousVisibles = visibles;
           _stats = stats;
+          _idsNonTermines = idsNonTermines;
           // On ne réécrit la bannière QUE s'il y a une nouveauté :
           // un rechargement « vide » ne doit pas effacer une bannière
           // que l'utilisateur n'a pas encore fermée.
           if (notification != null) _notificationRdv = notification;
         });
 
-        // On mémorise les IDs actuels pour le prochain rechargement.
-        _anciensIds = idsActuels;
+        // On mémorise les statuts actuels pour le prochain rechargement.
+        _anciensStatuts = {
+          for (final r in rendezVous) r.id: r.statut,
+        };
       }
     } catch (e) {
       if (mounted) setState(() => _erreur = e.toString());
     }
   }
 
-  Future<void> _accepter(RendezVous rdv) async {
-    await _service.accepterRendezVous(rdv.id);
-    // On recharge tout après l'action, pour que l'écran reflète bien
-    // le nouveau statut (et les stats à jour) sans logique compliquée
-    // de mise à jour manuelle d'une seule ligne dans la liste.
-    await _charger();
-    // Retour visuel : petit message vert en bas de l'écran.
-    if (mounted) messageFlash(context, 'Rendez-vous confirmé');
-  }
+  // NOTE : la CONFIRMATION (acceptation) et le refus des rendez-vous
+  // appartiennent à la secrétaire : aucun bouton ni callback « Confirmer »
+  // n'existe côté médecin. Le médecin ne fait que Terminer / Non terminé.
 
-  Future<void> _refuser(RendezVous rdv, String motif) async {
-    // Le motif est transmis au service : il est visible par le patient
-    // (bandeau « Motif du refus » dans le détail, côté patient).
-    await _service.refuserRendezVous(rdv.id, motif: motif);
+  Future<void> _nonTermine(RendezVous rdv) async {
+    // Statut « terminé » + drapeau consultationTerminee = false
+    // (arbitrage : l'enum du modèle n'a pas de 6ᵉ statut).
+    await _service.marquerConsultationNonTerminee(rdv.id);
     await _charger();
-    if (mounted) messageFlash(context, 'Rendez-vous refusé');
+    if (mounted) messageFlash(context, 'Consultation marquée non terminée');
   }
 
   Future<void> _terminer(RendezVous rdv) async {
@@ -222,14 +276,15 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
     // vraies données et les vraies actions branchées sur Firestore.
     return EspaceMedecin(
       medecin: _medecin!,
-      rendezVousDuJour: _rendezVous,
-      enAttente: _stats['enAttente'] ?? 0,
+      // Seuls les rendez-vous visibles (confirmés / terminés) sont
+      // transmis aux écrans (règle du point 3).
+      rendezVousDuJour: _rendezVousVisibles,
       patientsSuivis: _stats['patientsSuivis'] ?? 0,
+      idsNonTermines: _idsNonTermines,
       notificationRdv: _notificationRdv,
       onFermerNotificationRdv: _fermerNotification,
       onRafraichir: _charger,
-      onAccepterRendezVous: _accepter,
-      onRefuserRendezVous: _refuser,
+      onNonTermineRendezVous: _nonTermine,
       onTerminerRendezVous: _terminer,
       onDeconnexion: _deconnexion,
     );

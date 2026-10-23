@@ -133,7 +133,6 @@ void main() {
           AccueilMedecin(
             medecin: medecinTest,
             rendezVousDuJour: desRendezVous(),
-            enAttente: 2,
             patientsSuivis: 10,
             onVoirTout: () {},
             onVoirPlanning: () {},
@@ -159,11 +158,38 @@ void main() {
           largeur,
           DetailRendezVousMedecin(
             rdv: desRendezVous().first,
-            onAccepter: () async {},
-            onRefuser: (_) async {},
+            onTerminer: () async {},
+            onNonTermine: () async {},
           ),
         );
       });
+
+      // Pied à deux boutons « Terminer » / « Non terminé » : la
+      // maquette ne les montre que sur un RDV CONFIRMÉ dont l'heure
+      // est passée ou en cours.
+      testWidgets(
+        'détail médecin — actions consultation passée à $largeur px',
+        (tester) async {
+          await verifierLargeur(
+            tester,
+            largeur,
+            DetailRendezVousMedecin(
+              rdv: RendezVous(
+                id: '9',
+                patientNom: 'Nzoghe-Mba-Okouma-Koumba',
+                patientPrenom: 'Jean-Baptiste-François',
+                date: DateTime(2020, 1, 1),
+                heure: '09:00',
+                statut: StatutRendezVous.confirme,
+                motif: 'Consultation de contrôle cardiaque',
+                medecinNom: 'Dr Nzoghe-Mba-Obame-Okouma',
+              ),
+              onTerminer: () async {},
+              onNonTermine: () async {},
+            ),
+          );
+        },
+      );
     }
   });
 

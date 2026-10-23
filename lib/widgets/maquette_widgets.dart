@@ -65,7 +65,21 @@ class CarteSpec extends StatelessWidget {
 class PastilleStatutSpec extends StatelessWidget {
   final StatutRendezVous statut;
 
-  const PastilleStatutSpec({super.key, required this.statut});
+  /// Consultation marquée « non terminée » par le médecin : la pastille
+  /// affiche alors « Non terminé » (style neutre pastel orange, le même
+  /// que « En attente ») au lieu de « Terminé ». Voir l'arbitrage dans
+  /// MedecinService.marquerConsultationNonTerminee.
+  final bool nonTermine;
+
+  const PastilleStatutSpec({
+    super.key,
+    required this.statut,
+    this.nonTermine = false,
+  });
+
+  /// Vrai seulement si le drapeau est posé SUR un rendez-vous terminé.
+  bool get _estNonTermine =>
+      nonTermine && statut == StatutRendezVous.termine;
 
   static Color fond(StatutRendezVous s) {
     switch (s) {
@@ -112,18 +126,26 @@ class PastilleStatutSpec extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // « Non terminé » : libellé + couleurs neutres (pastel orange),
+    // distinct du vert/« Terminé » des consultations abouties.
+    final couleurFond =
+        _estNonTermine ? MaquetteCouleurs.attenteFond : fond(statut);
+    final couleurTexteFinal =
+        _estNonTermine ? MaquetteCouleurs.attenteTexte : couleurTexte(statut);
+    final libelleAffiche = _estNonTermine ? 'Non terminé' : libelle(statut);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: fond(statut),
+        color: couleurFond,
         borderRadius: BorderRadius.circular(MaquetteRayons.pillule),
       ),
       child: Text(
-        libelle(statut),
+        libelleAffiche,
         style: TextStyle(
           fontSize: MaquetteTypo.badgeStatut,
           fontWeight: FontWeight.w700,
-          color: couleurTexte(statut),
+          color: couleurTexteFinal,
         ),
       ),
     );
@@ -257,11 +279,15 @@ class CarteRdvTableauSpec extends StatelessWidget {
   /// Sous-titre forcé (ex : « Dr X » côté secrétaire). Sinon : le motif.
   final String? sousTitre;
 
+  /// Consultation marquée « non terminée » → pastille « Non terminé ».
+  final bool nonTermine;
+
   const CarteRdvTableauSpec({
     super.key,
     required this.rdv,
     this.onTap,
     this.sousTitre,
+    this.nonTermine = false,
   });
 
   @override
@@ -305,7 +331,7 @@ class CarteRdvTableauSpec extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          PastilleStatutSpec(statut: rdv.statut),
+          PastilleStatutSpec(statut: rdv.statut, nonTermine: nonTermine),
         ],
       ),
     );
@@ -321,11 +347,15 @@ class CarteRdvListeSpec extends StatelessWidget {
   final VoidCallback? onTap;
   final String? sousTitre;
 
+  /// Consultation marquée « non terminée » → pastille « Non terminé ».
+  final bool nonTermine;
+
   const CarteRdvListeSpec({
     super.key,
     required this.rdv,
     this.onTap,
     this.sousTitre,
+    this.nonTermine = false,
   });
 
   @override
@@ -379,7 +409,7 @@ class CarteRdvListeSpec extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          PastilleStatutSpec(statut: rdv.statut),
+          PastilleStatutSpec(statut: rdv.statut, nonTermine: nonTermine),
         ],
       ),
     );
@@ -535,6 +565,11 @@ class BoutonDegradeSpec extends StatelessWidget {
   final double hauteur;
   final IconData? icone;
 
+  /// (AJOUT) Indicateur de progression pendant un envoi : le libellé
+  /// est remplacé par un spinner blanc. `onPressed` reste l'info de
+  /// « bouton actif » (non null pendant l'envoi : le dégradé reste).
+  final bool chargement;
+
   const BoutonDegradeSpec({
     super.key,
     required this.texte,
@@ -542,6 +577,7 @@ class BoutonDegradeSpec extends StatelessWidget {
     this.pleineLargeur = true,
     this.hauteur = 52,
     this.icone,
+    this.chargement = false,
   });
 
   @override
@@ -561,30 +597,39 @@ class BoutonDegradeSpec extends StatelessWidget {
             color: actif ? null : const Color(0xFF9AA4C0),
             borderRadius: BorderRadius.circular(MaquetteRayons.bouton),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icone != null) ...[
-                Icon(icone, size: 19, color: Colors.white),
-                const SizedBox(width: 8),
-              ],
-              // Flexible : sur un écran étroit (360 px), le libellé
-              // s'adapte à la place restante au lieu de déborder.
-              Flexible(
-                child: Text(
-                  texte,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+          child: chargement
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
                     color: Colors.white,
                   ),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icone != null) ...[
+                      Icon(icone, size: 19, color: Colors.white),
+                      const SizedBox(width: 8),
+                    ],
+                    // Flexible : sur un écran étroit (360 px), le libellé
+                    // s'adapte à la place restante au lieu de déborder.
+                    Flexible(
+                      child: Text(
+                        texte,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -653,6 +698,11 @@ class BoutonPleinSpec extends StatelessWidget {
   final double hauteur;
   final bool pleineLargeur;
 
+  /// (AJOUT) Indicateur de progression pendant un envoi : le libellé
+  /// est remplacé par un spinner blanc. `onPressed` reste l'info de
+  /// « bouton actif » (non null pendant l'envoi : la couleur reste).
+  final bool chargement;
+
   const BoutonPleinSpec({
     super.key,
     required this.texte,
@@ -660,6 +710,7 @@ class BoutonPleinSpec extends StatelessWidget {
     this.couleurActive = MaquetteCouleurs.refuseTexte,
     this.hauteur = 52,
     this.pleineLargeur = true,
+    this.chargement = false,
   });
 
   @override
@@ -676,14 +727,25 @@ class BoutonPleinSpec extends StatelessWidget {
           color: actif ? couleurActive : const Color(0xFFD7DCE8),
           borderRadius: BorderRadius.circular(MaquetteRayons.bouton),
         ),
-        child: Text(
-          texte,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: actif ? Colors.white : const Color(0xFF8A93AB),
-          ),
-        ),
+        child: chargement && actif
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                texte,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: actif ? Colors.white : const Color(0xFF8A93AB),
+                ),
+              ),
       ),
     );
   }

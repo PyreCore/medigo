@@ -1,18 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────
 // DÉTAIL D'UN RENDEZ-VOUS (MÉDECIN) — maquette §4.3.
 //
-//  · en-tête : bouton retour 44 px, titre 19 px, pastille de statut ;
+//  · en-tête : bouton retour 44 px, titre 19 px, pastille de statut
+//    (« Non terminé » en style neutre si le drapeau est posé) ;
 //  · carte patient : avatar initiales 56 px, nom 18 px w800, motif 13,
 //    puis lignes Date / Heure / Motif séparées par un trait ;
 //  · carte « Informations du patient » : téléphone, date de naissance,
 //    groupe sanguin, LUS DANS FIREBASE (MedecinService) avec
 //    indicateur de chargement et gestion d'erreur ;
 //  · si refusé : bloc « Motif du refus » (#FDE8E6) ;
-//  · barre d'action fixe en bas selon le statut : Refuser/Accepter
-//    (en attente), Terminer la consultation (confirmé), bloc «
-//    Consultation terminée » (terminé), bloc « Rendez-vous refusé » ;
-//  · « Refuser » ouvre un panneau du bas (coins hauts 28) sur fond
-//    assombri, avec champ « Motif du refus » OBLIGATOIRE.
+//  · pied fixe selon le statut — le médecin n'a QUE deux actions,
+//    sur un rendez-vous CONFIRMÉ dont l'heure est passée ou en cours :
+//    « Terminer » / « Non terminé » (chaque action passe par une
+//    boîte de confirmation, puis un message de succès) ;
+//  · la CONFIRMATION (acceptation) et le refus appartiennent à la
+//    secrétaire : aucun bouton « Confirmer » ici.
 // La LOGIQUE (callbacks reçus du parent) est inchangée.
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
@@ -28,23 +30,24 @@ class DetailRendezVousMedecin extends StatefulWidget {
   /// Spécialité du médecin connecté (sous-titre de la carte patient).
   final String? specialiteMedecin;
 
-  // Fonctions optionnelles et ASYNCHRONES (Future<void> car elles vont
-  // appeler Firestore). Si null, le bouton correspondant est désactivé.
-  final Future<void> Function()? onAccepter;
-
-  /// Refus AVEC motif obligatoire (saisi dans le panneau du bas).
-  final Future<void> Function(String motif)? onRefuser;
-
   /// Passe le rendez-vous au statut « terminé » (bouton du pied).
   final Future<void> Function()? onTerminer;
+
+  /// Marque la consultation comme NON terminée (statut « terminé » +
+  /// drapeau consultationTerminee = false côté service).
+  final Future<void> Function()? onNonTermine;
+
+  /// Vrai si ce rendez-vous est déjà marqué « non terminé » : le pied
+  /// affiche alors un bloc neutre « Consultation non terminée ».
+  final bool consultationNonTerminee;
 
   const DetailRendezVousMedecin({
     super.key,
     required this.rdv,
     this.specialiteMedecin,
-    this.onAccepter,
-    this.onRefuser,
     this.onTerminer,
+    this.onNonTermine,
+    this.consultationNonTerminee = false,
   });
 
   @override
@@ -268,56 +271,66 @@ class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
   }
 
   // ── Pied fixe : actions selon le statut (maquette §4.3) ─────────
+  // Le médecin n'a que DEUX actions, et seulement sur un rendez-vous
+  // CONFIRMÉ dont l'heure est passée ou en cours : Terminer / Non
+  // terminé. La confirmation (acceptation) et le refus sont gérés par
+  // la secrétaire — aucun bouton « Confirmer » ici.
   Widget _piedActions() {
     switch (widget.rdv.statut) {
       case StatutRendezVous.enAttente:
+        // Confirmation par la secrétaire : pas d'action côté médecin.
+        return const BlocEtatSpec(
+          texte: 'En attente de confirmation par la secrétaire',
+          fond: MaquetteCouleurs.attenteFond,
+          couleurTexte: MaquetteCouleurs.attenteTexte,
+        );
+      case StatutRendezVous.confirme:
+        // Actions disponibles UNIQUEMENT une fois l'heure passée ou
+        // la consultation en cours ; avant, simple information.
+        if (widget.rdv.dateHeure.isAfter(DateTime.now())) {
+          return BlocEtatSpec(
+            texte: 'Consultation prévue à ${widget.rdv.heure}',
+            fond: MaquetteCouleurs.bleuClair,
+            couleurTexte: MaquetteCouleurs.bleu,
+          );
+        }
         return Row(
           children: [
             Expanded(
               child: BoutonContourSpec(
-                texte: 'Refuser',
-                couleur: MaquetteCouleurs.refuseTexte,
-                onPressed: widget.onRefuser == null
+                texte: 'Non terminé',
+                couleur: MaquetteCouleurs.texteSecondaire,
+                onPressed: widget.onNonTermine == null
                     ? null
-                    : () => _ouvrirPanneauRefus(context),
+                    : _marquerNonTermineeAvecConfirmation,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: BoutonDegradeSpec(
-                texte: 'Accepter',
-                onPressed: widget.onAccepter == null
+                texte: 'Terminer',
+                icone: Icons.check_rounded,
+                onPressed: widget.onTerminer == null
                     ? null
-                    : () async {
-                        // On capture le Navigator AVANT l'appel asynchrone
-                        // (Astuce pour le lint use_build_context_synchronously).
-                        final navigator = Navigator.of(context);
-                        await widget.onAccepter!();
-                        if (mounted) navigator.pop();
-                      },
+                    : _terminerAvecConfirmation,
               ),
             ),
           ],
         );
-      case StatutRendezVous.confirme:
-        return BoutonDegradeSpec(
-          texte: 'Terminer la consultation',
-          icone: Icons.check_rounded,
-          onPressed: widget.onTerminer == null
-              ? null
-              : () async {
-                  // Navigator capturé avant l'appel asynchrone (lint).
-                  final navigator = Navigator.of(context);
-                  await widget.onTerminer!();
-                  if (mounted) navigator.pop();
-                },
-        );
       case StatutRendezVous.termine:
-        return const BlocEtatSpec(
-          texte: 'Consultation terminée',
-          fond: MaquetteCouleurs.termineFond,
-          couleurTexte: MaquetteCouleurs.termineTexte,
-        );
+        // Consultation marquée « non terminée » : bloc neutre orange,
+        // distinct du gris « Consultation terminée ».
+        return widget.consultationNonTerminee
+            ? const BlocEtatSpec(
+                texte: 'Consultation non terminée',
+                fond: MaquetteCouleurs.attenteFond,
+                couleurTexte: MaquetteCouleurs.attenteTexte,
+              )
+            : const BlocEtatSpec(
+                texte: 'Consultation terminée',
+                fond: MaquetteCouleurs.termineFond,
+                couleurTexte: MaquetteCouleurs.termineTexte,
+              );
       case StatutRendezVous.refuse:
       case StatutRendezVous.annule:
         return const BlocEtatSpec(
@@ -328,124 +341,96 @@ class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
     }
   }
 
-  // ── Panneau du bas « Refuser ce rendez-vous » (coins hauts 28) ──
-  void _ouvrirPanneauRefus(BuildContext context) {
-    final controleurMotif = TextEditingController();
-
-    showModalBottomSheet<void>(
+  // ── Boîte de confirmation avant d'enregistrer (maquette) ────────
+  // Annuler → rien n'est écrit ; l'action demandée → le callback du
+  // parent (Firestore) est appelé, puis un message de succès s'affiche
+  // (publié par le chargeur après le rechargement).
+  Future<bool> _demanderConfirmation({
+    required String titre,
+    required String message,
+    required String action,
+  }) async {
+    final resultat = await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStatePanneau) {
-            final motifValide = controleurMotif.text.trim().isNotEmpty;
-            return Container(
-              padding: EdgeInsets.only(
-                // Au-dessus du clavier : le panneau glisse vers le haut.
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              decoration: const BoxDecoration(
-                color: MaquetteCouleurs.surface,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
+      builder: (context) => Dialog(
+        backgroundColor: MaquetteCouleurs.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(MaquetteRayons.carte),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titre,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: MaquetteCouleurs.texte,
                 ),
               ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Refuser ce rendez-vous',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: MaquetteCouleurs.texte,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Indiquez un motif : il sera visible par le patient. '
-                        'Le créneau sera de nouveau disponible.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: MaquetteCouleurs.texteSecondaire,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: controleurMotif,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'Motif du refus *',
-                          hintText: 'Ex : Créneau déjà occupé…',
-                        ),
-                        onChanged: (_) => setStatePanneau(() {}),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: BoutonContourSpec(
-                              texte: 'Annuler',
-                              couleur: MaquetteCouleurs.texteSecondaire,
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            // Désactivé (gris) tant que le motif est vide.
-                            child: BoutonPleinSpec(
-                              texte: 'Confirmer le refus',
-                              onPressed: motifValide
-                                  ? () async {
-                                      final navigator =
-                                          Navigator.of(context);
-                                      final messenger =
-                                          ScaffoldMessenger.of(context);
-                                      final motif =
-                                          controleurMotif.text.trim();
-                                      try {
-                                        await widget.onRefuser!(motif);
-                                      } catch (e) {
-                                        // Erreur Firestore (règles,
-                                        // réseau…) : le panneau reste
-                                        // ouvert, l'erreur est montrée.
-                                        messenger.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Refus impossible : $e',
-                                            ),
-                                          ),
-                                        );
-                                        return;
-                                      }
-                                      // Ferme le panneau, puis revient à
-                                      // l'espace (le détail).
-                                      navigator.pop();
-                                      navigator.pop();
-                                    }
-                                  : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.4,
+                  color: MaquetteCouleurs.texteSecondaire,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: BoutonContourSpec(
+                      texte: 'Annuler',
+                      couleur: MaquetteCouleurs.texteSecondaire,
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: BoutonDegradeSpec(
+                      texte: action,
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
-        );
-      },
-    ).whenComplete(controleurMotif.dispose);
+            ],
+          ),
+        ),
+      ),
+    );
+    return resultat ?? false;
+  }
+
+  Future<void> _terminerAvecConfirmation() async {
+    final confirme = await _demanderConfirmation(
+      titre: 'Terminer la consultation ?',
+      message: 'Le rendez-vous passera au statut « Terminé ».',
+      action: 'Terminer',
+    );
+    if (!confirme || !mounted) return;
+    // Navigator capturé avant l'appel asynchrone (lint).
+    final navigator = Navigator.of(context);
+    await widget.onTerminer!();
+    if (mounted) navigator.pop();
+  }
+
+  Future<void> _marquerNonTermineeAvecConfirmation() async {
+    final confirme = await _demanderConfirmation(
+      titre: 'Marquer comme non terminée ?',
+      message: 'La consultation sera enregistrée comme non terminée '
+          'dans votre suivi.',
+      action: 'Non terminé',
+    );
+    if (!confirme || !mounted) return;
+    final navigator = Navigator.of(context);
+    await widget.onNonTermine!();
+    if (mounted) navigator.pop();
   }
 
   @override
@@ -491,7 +476,10 @@ class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
                       ),
                     ),
                   ),
-                  PastilleStatutSpec(statut: widget.rdv.statut),
+                  PastilleStatutSpec(
+                    statut: widget.rdv.statut,
+                    nonTermine: widget.consultationNonTerminee,
+                  ),
                 ],
               ),
             ),

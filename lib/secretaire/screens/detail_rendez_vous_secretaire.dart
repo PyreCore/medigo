@@ -182,11 +182,12 @@ class DetailRendezVousSecretaire extends StatelessWidget {
       routeMedigo(
         builder: (_) => RefuserRendezVousSecretaire(
           rdvId: rdv.id,
-          onRefuser: (rdvId, {motif}) async {
-            // Ferme le détail AVANT l'appel au service (pas de double-pop).
-            if (context.mounted) Navigator.pop(context);
-            await onRefuser(rdv, motif: motif);
-          },
+          // Simple relais SANS pop : le formulaire attend l'enregistrement,
+          // affiche son animation de succès, puis referme LE FORMULAIRE
+          // puis CE DÉTAIL (double-pop de _confirmerRefus) — on retombe
+          // sur la liste, jamais sur un détail périmé. L'ancien pop
+          // immédiat ici refermait le formulaire AVANT le service.
+          onRefuser: (rdvId, {motif}) => onRefuser(rdv, motif: motif),
         ),
       ),
     );

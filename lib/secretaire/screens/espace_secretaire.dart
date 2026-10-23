@@ -31,14 +31,22 @@ class EspaceSecretaire extends StatefulWidget {
   // Callbacks transmis par le parent : EspaceSecretaire ne fait que les
   // relayer aux bons écrans, sans savoir s'ils parlent à Firestore ou
   // juste à des données de démo en mémoire.
-  final void Function({
+  // Chaîne ASYNCHRONE (point 5) : le formulaire attend l'écriture
+  // Firestore réelle (chargeur → SecretaireService) pour afficher son
+  // état de chargement puis son animation de succès, AVANT de revenir
+  // à la liste. L'ancien pop immédiat supprimait ces états.
+  final Future<void> Function({
     required String nom,
     required String prenom,
     required String telephone,
     String? groupeSanguin,
   })? onEnregistrerPatient;
 
-  final void Function({
+  // Chaîne ASYNCHRONE (point 5) : le formulaire attend l'écriture
+  // Firestore réelle (chargeur → SecretaireService) pour afficher son
+  // état de chargement puis son animation de succès, AVANT de revenir
+  // à la liste. L'ancien pop immédiat supprimait ces états.
+  final Future<void> Function({
     required Patient patient,
     required Medecin medecin,
     required DateTime date,
@@ -107,10 +115,11 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
             }
           },
           onRefuser: (rdv, {motif}) async {
-            if (widget.onRefuserRendezVous != null) {
-              await widget.onRefuserRendezVous!(rdv, motif: motif);
-              if (mounted) Navigator.pop(context);
-            }
+            // Pas de pop ici (point 5) : le formulaire de refus gère
+            // lui-même son animation de succès puis referme LE
+            // FORMULAIRE puis LE DÉTAIL (double-pop) — l'ancien pop
+            // immédiat refermait le formulaire avant la fin du service.
+            await widget.onRefuserRendezVous?.call(rdv, motif: motif);
           },
         ),
       ),
@@ -123,21 +132,22 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
       context,
       routeMedigo(
         builder: (_) => EnregistrementPatientSecretaire(
+          // ASYNC (point 5) : on attend la fin de l'enregistrement
+          // Firestore. PAS de pop ici : le formulaire affiche son
+          // chargement puis son animation de succès, et se ferme
+          // lui-même ensuite (l'ancien pop immédiat coupait ces états).
           onValider: ({
             required nom,
             required prenom,
             required telephone,
             groupeSanguin,
-          }) {
-            widget.onEnregistrerPatient?.call(
+          }) async {
+            await widget.onEnregistrerPatient?.call(
               nom: nom,
               prenom: prenom,
               telephone: telephone,
               groupeSanguin: groupeSanguin,
             );
-            // On revient à l'écran précédent (liste des patients) une
-            // fois le formulaire validé.
-            Navigator.pop(context);
           },
         ),
       ),
@@ -152,21 +162,24 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
         builder: (_) => ProgrammerRendezVousSecretaire(
           patients: widget.patients,
           medecins: widget.medecins,
+          // ASYNC (point 5) : on attend la fin de l'enregistrement
+          // Firestore. PAS de pop ici : le formulaire affiche son
+          // chargement puis son animation de succès, et se ferme
+          // lui-même ensuite (l'ancien pop immédiat coupait ces états).
           onValider: ({
             required patient,
             required medecin,
             required date,
             required heure,
             motif,
-          }) {
-            widget.onProgrammerRendezVous?.call(
+          }) async {
+            await widget.onProgrammerRendezVous?.call(
               patient: patient,
               medecin: medecin,
               date: date,
               heure: heure,
               motif: motif,
             );
-            Navigator.pop(context);
           },
         ),
       ),

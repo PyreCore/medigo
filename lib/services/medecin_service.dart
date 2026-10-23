@@ -239,6 +239,52 @@ class MedecinService {
     });
   }
 
+  /// (AJOUT) Marque une consultation comme NON terminée.
+  ///
+  /// Arbitrage : l'enum StatutRendezVous (lib/models — hors périmètre)
+  /// n'a que 5 valeurs et convertirait 'non_termine' en « en attente »
+  /// partout. On écrit donc statut « termine » + booléen
+  /// `consultationTerminee: false` à côté. Seul l'espace médecin
+  /// affiche « Non terminé » (via getConsultationsNonTerminees) ;
+  /// les autres espaces voient « Terminé », sans risque.
+  Future<void> marquerConsultationNonTerminee(String rdvId) async {
+    await _db.collection('rendez_vous').doc(rdvId).update({
+      'statut': 'termine',
+      'consultationTerminee': false,
+    });
+  }
+
+  /// (AJOUT) Motif de refus d'un rendez-vous, pour la notification
+  /// « RDV refusé » de l'espace médecin (point 4c).
+  ///
+  /// Lecture ciblée d'un SEUL document : le mapping de
+  /// getTousRendezVous (inchangé) ne transporte pas motifRefus, et
+  /// modifier cette méthode existante serait hors du périmètre
+  /// « ajouts seuls ». Appelé uniquement lorsqu'un refus est détecté
+  /// (événement rare) : une lecture Firestore de plus, pas une requête
+  /// supplémentaire à chaque chargement.
+  Future<String?> getMotifRefus(String rdvId) async {
+    final doc = await _db.collection('rendez_vous').doc(rdvId).get();
+    final motif = doc.data()?['motifRefus'];
+    // Champ absent ou vide → null (le texte par défaut sera affiché).
+    return (motif is String && motif.isNotEmpty) ? motif : null;
+  }
+
+  /// (AJOUT) Ids des consultations du médecin marquées « non terminées ».
+  ///
+  /// Requête à deux filtres d'égalité (medecinId + consultationTerminee)
+  /// : servie par fusion d'index simples, sans index composite. Seuls
+  /// les documents ÉCRITS explicitement avec consultationTerminee=false
+  /// reviennent (les consultations normales n'ont pas ce champ).
+  Future<Set<String>> getConsultationsNonTerminees(String medecinId) async {
+    final snapshot = await _db
+        .collection('rendez_vous')
+        .where('medecinId', isEqualTo: medecinId)
+        .where('consultationTerminee', isEqualTo: false)
+        .get();
+    return snapshot.docs.map((doc) => doc.id).toSet();
+  }
+
   /// (AJOUT) Informations patient d'un rendez-vous, pour l'écran de
   /// détail : téléphone, date de naissance et groupe sanguin.
   ///

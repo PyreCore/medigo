@@ -3,11 +3,12 @@
 //
 // Deux dispositions selon la largeur d'écran (responsive) :
 //  · web / tablette large (≥ 900 px) : RAIL de navigation à gauche
-//    (icône + libellé), en-tête de page intégré, contenu centré avec
-//    largeur maximale : c'est le schéma des applications professionnelles
-//    internationales (Doctolib Pro, Linear, Notion).
+//    (libellés), en-tête de page intégré, contenu centré avec
+//    largeur maximale. Fond en dégradé G de la maquette
+//    (#2458D3 → #28211A ≈ 80°), libellés blancs.
 //  · mobile (< 900 px) : barre du haut compacte + barre du bas en
-//    dégradé signature, avec icône + libellé et pilule active (maquette).
+//    dégradé G, icône + libellé blancs et onglet actif plus marqué
+//    (pastille blanche translucide, maquette §3).
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../theme/maquette_tokens.dart';
@@ -188,10 +189,9 @@ class _RailMedigo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 256,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.trait)),
-      ),
+      // Fond en dégradé G de la maquette (#2458D3 → #28211A ≈ 80°),
+      // comme la barre du bas mobile : la navigation est uniforme.
+      decoration: const BoxDecoration(gradient: MaquetteDegrades.principal),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
@@ -204,17 +204,17 @@ class _RailMedigo extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.bleuMedical,
+                  color: Colors.white,
                   letterSpacing: -0.4,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 titreEspace,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.texteFaible,
+                  color: Colors.white.withValues(alpha: 0.75),
                 ),
               ),
               const SizedBox(height: 28),
@@ -230,21 +230,19 @@ class _RailMedigo extends StatelessWidget {
               // Carte utilisateur en bas : clique = onglet Profil.
               InkWell(
                 borderRadius: BorderRadius.circular(14),
-                hoverColor: AppColors.bleuMedical.withValues(alpha: 0.05),
+                hoverColor: Colors.white.withValues(alpha: 0.08),
                 onTap: () => onChoisirOnglet(libelles.length - 1),
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.fond,
+                    color: Colors.white.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: AppColors.bleuMedical.withValues(
-                          alpha: 0.12,
-                        ),
+                        backgroundColor: Colors.white.withValues(alpha: 0.22),
                         backgroundImage: imageProfil(photoUser),
                         child: photoUser == null
                             ? Text(
@@ -252,7 +250,7 @@ class _RailMedigo extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: AppColors.bleuMedical,
+                                  color: Colors.white,
                                 ),
                               )
                             : null,
@@ -269,14 +267,14 @@ class _RailMedigo extends StatelessWidget {
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.texte,
+                                color: Colors.white,
                               ),
                             ),
                             Text(
                               titreEspace,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: AppColors.texteFaible,
+                                color: Colors.white.withValues(alpha: 0.75),
                               ),
                             ),
                           ],
@@ -313,15 +311,17 @@ class _ItemRail extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         // Survol subtil (utile surtout sur web).
-        hoverColor: AppColors.bleuMedical.withValues(alpha: 0.06),
+        hoverColor: Colors.white.withValues(alpha: 0.08),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
           decoration: BoxDecoration(
+            // Onglet ACTIF : pastille blanche translucide, plus marquée
+            // que l'inactif (maquette §3 sur dégradé).
             color: actif
-                ? AppColors.bleuMedical.withValues(alpha: 0.10)
+                ? Colors.white.withValues(alpha: 0.20)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
@@ -331,8 +331,10 @@ class _ItemRail extends StatelessWidget {
             libelle,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: actif ? FontWeight.w700 : FontWeight.w500,
-              color: actif ? AppColors.bleuMedical : AppColors.texteFaible,
+              fontWeight: actif ? FontWeight.w800 : FontWeight.w500,
+              color: actif
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.80),
             ),
           ),
         ),
@@ -365,7 +367,11 @@ class _BarreBasseMedigo extends StatelessWidget {
       // barre mesure alors la hauteur de l'écran et le corps reçoit 0 px
       // (écran blanc). La borne garantit une taille normale (~68 px de
       // contenu + zone sûre basse), et reste un plafond de sécurité.
-      constraints: const BoxConstraints(maxHeight: 96),
+      //
+      // Hauteur EXPLICITE : sans elle, la décoration en dégradé ne se
+      // voyait pas correctement (fond perçu « blanc ou uni »). Le
+      // Container mesure désormais 68 px de contenu (+ SafeArea basse).
+      height: 68,
       // Fond en dégradé G de la maquette (#2458D3 → #28211A, ≈ 80°).
       decoration: const BoxDecoration(gradient: MaquetteDegrades.principal),
       child: SafeArea(
@@ -385,24 +391,24 @@ class _BarreBasseMedigo extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Onglet ACTIF : pastille 56 x 32 (rayon 16) fond
-                      // #E8EFFD, icône en #2458D3 (maquette §3).
+                      // Onglet ACTIF : pastille 56 x 32 (rayon 16) blanche
+                      // translucide + icône blanche — plus marqué que
+                      // l'inactif (maquette §3 : icônes/libellés blancs,
+                      // actif plus visible).
                       Container(
                         width: 56,
                         height: 32,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: actif
-                              ? MaquetteCouleurs.bleuClair
+                              ? Colors.white.withValues(alpha: 0.22)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           _iconePourLibelle(entree.value),
                           size: 22,
-                          color: actif
-                              ? MaquetteCouleurs.bleu
-                              : Colors.white,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -415,10 +421,9 @@ class _BarreBasseMedigo extends StatelessWidget {
                           maxLines: 1,
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: actif
-                                ? MaquetteCouleurs.bleu
-                                : Colors.white,
+                            fontWeight:
+                                actif ? FontWeight.w800 : FontWeight.w600,
+                            color: Colors.white,
                           ),
                         ),
                       ),

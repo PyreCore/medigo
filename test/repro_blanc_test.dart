@@ -83,7 +83,6 @@ void main() {
           EspaceMedecin(
             medecin: medecinTest,
             rendezVousDuJour: desRendezVous(),
-            enAttente: 1,
             patientsSuivis: 10,
           ),
         );
