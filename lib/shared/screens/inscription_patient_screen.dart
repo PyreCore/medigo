@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../widgets/champ_mot_de_passe.dart';
+import '../../widgets/regle_mot_de_passe.dart';
 
 /// Écran d'INSCRIPTION patient : formulaire pur, sans aucune logique
 /// Firestore. Il appelle onValider avec les informations saisies ; c'est
@@ -53,6 +55,10 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
   // encore choisi à l'ouverture.
   DateTime? _dateNaissance;
 
+  // true quand le mot de passe remplit les 4 critères imposés. Le bouton
+  // « Créer mon compte » reste inactif tant que c'est faux.
+  bool _mdpValide = false;
+
   @override
   void dispose() {
     _controllerNom.dispose();
@@ -96,9 +102,12 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
       _signaler('Merci de renseigner un email valide');
       return;
     }
-    // 6 caractères est le minimum imposé par Firebase Authentication.
-    if (motDePasse.length < 6) {
-      _signaler('Le mot de passe doit contenir au moins 6 caractères');
+    // 8 caractères : règle commune à tous les comptes (voir
+    // regle_mot_de_passe.dart). Firebase n'accepte que 6 au minimum,
+    // on durcit côté application.
+    final erreurPassword = verifierMotDePasse(motDePasse);
+    if (erreurPassword != null) {
+      _signaler(erreurPassword);
       return;
     }
 
@@ -160,18 +169,14 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
+          // Aucune confirmation n'est demandée ici pour garder le
+          // formulaire simple ; l'utilisateur peut toujours utiliser
+          // « Mot de passe oublié » côté connexion. Le champ affiche la
+          // ligne de force et coche les 4 critères en direct.
+          ChampMotDePasse(
             controller: _controllerMotDePasse,
-            // obscureText masque la saisie (le champ est une valeur
-            // secrète). Aucune confirmation n'est demandée ici pour
-            // garder le formulaire simple ; l'utilisateur peut
-            // toujours utiliser "Mot de passe oublié" côté connexion.
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Mot de passe (6 caractères minimum)',
-              prefixIcon: Icon(Icons.lock),
-              border: OutlineInputBorder(),
-            ),
+            bordure: const OutlineInputBorder(),
+            onValideChange: (valide) => setState(() => _mdpValide = valide),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -218,7 +223,10 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: widget.onValider == null ? null : _valider,
+              // Tant que le mot de passe n'a pas ses 4 critères, la
+              // création est bloquée (bouton inactif).
+              onPressed:
+                  widget.onValider == null || !_mdpValide ? null : _valider,
               child: const Text(
                 'Créer mon compte',
                 style: TextStyle(fontSize: 16),

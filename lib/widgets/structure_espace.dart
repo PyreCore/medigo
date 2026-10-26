@@ -50,6 +50,11 @@ class StructureEspace extends StatelessWidget {
   /// Photo de profil optionnelle (null = initiales).
   final String? photoUser;
 
+  /// Dégradé de la navigation (rail à gauche et barre du bas).
+  /// null = dégradé bleu de la maquette. Permet à l'espace Admin
+  /// d'utiliser un thème violet sans dupliquer la coquille.
+  final LinearGradient? degradeNavigation;
+
   /// Index de l'onglet affiché.
   final int indexActif;
 
@@ -72,6 +77,7 @@ class StructureEspace extends StatelessWidget {
     required this.nomUtilisateur,
     required this.initialesUser,
     this.photoUser,
+    this.degradeNavigation,
     required this.indexActif,
     required this.onChoisirOnglet,
     required this.libelles,
@@ -84,6 +90,7 @@ class StructureEspace extends StatelessWidget {
     // les ListView enfants ont besoin d'une hauteur contrainte, ce que
     // IndexedStack dans un Center ne leur donne pas → écran blanc.
     final contenu = onglets[indexActif];
+    final degrade = degradeNavigation ?? MaquetteDegrades.principal;
 
     return LayoutBuilder(
       builder: (context, contraintes) {
@@ -98,6 +105,7 @@ class StructureEspace extends StatelessWidget {
                   nomUtilisateur: nomUtilisateur,
                   initialesUser: initialesUser,
                   photoUser: photoUser,
+                  degrade: degrade,
                   libelles: libelles,
                   indexActif: indexActif,
                   onChoisirOnglet: onChoisirOnglet,
@@ -153,6 +161,7 @@ class StructureEspace extends StatelessWidget {
             ),
           ),
           bottomNavigationBar: _BarreBasseMedigo(
+            degrade: degrade,
             libelles: libelles,
             indexActif: indexActif,
             onChoisirOnglet: onChoisirOnglet,
@@ -171,6 +180,7 @@ class _RailMedigo extends StatelessWidget {
   final String nomUtilisateur;
   final String initialesUser;
   final String? photoUser;
+  final LinearGradient degrade;
   final List<String> libelles;
   final int indexActif;
   final ValueChanged<int> onChoisirOnglet;
@@ -180,6 +190,7 @@ class _RailMedigo extends StatelessWidget {
     required this.nomUtilisateur,
     required this.initialesUser,
     required this.photoUser,
+    required this.degrade,
     required this.libelles,
     required this.indexActif,
     required this.onChoisirOnglet,
@@ -191,7 +202,7 @@ class _RailMedigo extends StatelessWidget {
       width: 256,
       // Fond en dégradé G de la maquette (#2458D3 → #28211A ≈ 80°),
       // comme la barre du bas mobile : la navigation est uniforme.
-      decoration: const BoxDecoration(gradient: MaquetteDegrades.principal),
+      decoration: BoxDecoration(gradient: degrade),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
@@ -350,11 +361,13 @@ class _BarreBasseMedigo extends StatelessWidget {
   final List<String> libelles;
   final int indexActif;
   final ValueChanged<int> onChoisirOnglet;
+  final LinearGradient degrade;
 
   const _BarreBasseMedigo({
     required this.libelles,
     required this.indexActif,
     required this.onChoisirOnglet,
+    required this.degrade,
   });
 
   @override
@@ -373,7 +386,7 @@ class _BarreBasseMedigo extends StatelessWidget {
       // Container mesure désormais 68 px de contenu (+ SafeArea basse).
       height: 68,
       // Fond en dégradé G de la maquette (#2458D3 → #28211A, ≈ 80°).
-      decoration: const BoxDecoration(gradient: MaquetteDegrades.principal),
+      decoration: BoxDecoration(gradient: degrade),
       child: SafeArea(
         top: false,
         child: Padding(

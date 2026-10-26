@@ -36,6 +36,9 @@ migrate_working_dir/
 # Symbolication related
 app.*.symbols
 
+# Firebase CLI : cache local des déploiements (non publié)
+.firebase/
+
 # Obfuscation related
 app.*.map.json
 

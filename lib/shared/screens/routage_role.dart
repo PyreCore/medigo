@@ -52,7 +52,7 @@ class RoutageRole {
   static Widget? ecranPourRole(String role, Map<String, dynamic> userData) {
     switch (role) {
       case 'adminSysteme':
-        return const AdminSystemeDashboard();
+        return const _AdminSystemeOrdinateurSeul();
       case 'adminHopital':
         return AdminHopitalDashboard(hopitalId: userData['hopitalId'] ?? '');
       case 'medecin':
@@ -102,5 +102,104 @@ class RoutageRole {
         .doc(uid)
         .get();
     return doc.data() ?? const <String, dynamic>{};
+  }
+}
+
+/// Garde de l'espace « administrateur système » : il n'est ouvert que
+/// sur écran large (ordinateur).
+///
+/// Le seuil de 900 px est le même que celui de la coquille `StructureEspace`
+/// : en dessous, on n'est plus dans la mise en page « rail à gauche » mais
+/// sur la barre du bas, c'est-à-dire sur mobile.
+///
+/// AVERTISSEMENT : c'est une protection de confort, pas une sécurité.
+/// Le contrôle est côté client, donc contournable. La vraie protection
+/// reste Firestore : `adminSysteme` n'a ce pouvoir que grâce à son champ
+/// `role`, qu'on ne peut s'attribuer que par un compte déjà super-admin
+/// (voir firestore.rules).
+class _AdminSystemeOrdinateurSeul extends StatelessWidget {
+  const _AdminSystemeOrdinateurSeul();
+
+  static const _seuil = 900;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, contraintes) {
+        if (contraintes.maxWidth >= _seuil) {
+          return const AdminSystemeDashboard();
+        }
+        return const _MessageEcranLarge();
+      },
+    );
+  }
+}
+
+class _MessageEcranLarge extends StatelessWidget {
+  const _MessageEcranLarge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Espace Administrateur système'),
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.desktop_windows_outlined,
+              size: 72,
+              color: Color(0xFF2E7D32),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Accès réservé à l\'ordinateur',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'La gestion du système demande un grand écran.\n'
+              'Connecte-toi depuis un navigateur sur ordinateur pour '
+              'accéder à cet espace.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/',
+                    (route) => false,
+                  );
+                },
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Retour à l\'accueil'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/champ_mot_de_passe.dart';
+import '../../widgets/regle_mot_de_passe.dart';
 
 class HopitalDetailScreen extends StatefulWidget {
   final String hopitalId;
@@ -167,8 +169,11 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
     final prenomController = TextEditingController();
     final emailController = TextEditingController();
     final telephoneController = TextEditingController();
-    final passwordController = TextEditingController(text: 'medico123');
+    final passwordController = TextEditingController();
     String? selectedSpecId;
+    // Le bouton reste inactif tant que le mot de passe n'a pas ses 8
+    // caractères, ses chiffres, sa casse et son caractère spécial.
+    bool mdpValide = false;
 
     showDialog(
       context: context,
@@ -183,7 +188,12 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                 TextField(controller: nomController, decoration: const InputDecoration(labelText: 'Nom')),
                 TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
                 TextField(controller: telephoneController, decoration: const InputDecoration(labelText: 'Telephone')),
-                TextField(controller: passwordController, decoration: const InputDecoration(labelText: 'Mot de passe')),
+                const SizedBox(height: 8),
+                ChampMotDePasse(
+                  controller: passwordController,
+                  onValideChange: (valide) =>
+                      setDialogState(() => mdpValide = valide),
+                ),
                 const SizedBox(height: 16),
                 StreamBuilder<QuerySnapshot>(
                   stream: _db.collection('specialites').where('hopitalId', isEqualTo: widget.hopitalId).snapshots(),
@@ -207,7 +217,16 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: !mdpValide
+                  ? null
+                  : () async {
+                final erreur = verifierMotDePasse(passwordController.text);
+                if (erreur != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(erreur)),
+                  );
+                  return;
+                }
                 try {
                   UserCredential result = await FirebaseAuth.instance.createUserWithEmailAndPassword(
                     email: emailController.text.trim(),

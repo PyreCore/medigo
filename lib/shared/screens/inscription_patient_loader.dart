@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/patient_service.dart';
+import '../../widgets/regle_mot_de_passe.dart';
 import 'inscription_patient_screen.dart';
 import '../../patient/screens/patient_home_loader.dart';
 
@@ -89,7 +90,8 @@ class _InscriptionPatientLoaderState extends State<InscriptionPatientLoader> {
       case 'invalid-email':
         return 'Cet email n\'est pas valide';
       case 'weak-password':
-        return 'Mot de passe trop faible (6 caractères minimum)';
+        return 'Mot de passe trop faible '
+            '($longueurMinimaleMotDePasse caractères minimum)';
       case 'network-request-failed':
         return 'Pas de connexion internet, réessayez';
       default:
