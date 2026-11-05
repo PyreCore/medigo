@@ -67,7 +67,14 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
 
   void _rafraichirStats() {
     if (!mounted) return;
-    setState(() => _stats = _chargerStats());
+    // AVANT : setState(() => _stats = _chargerStats()) — la fermeture
+    // flèche renvoie le Future de l'assignation, ce que setState refuse
+    // ("callback argument returned a Future"). L'erreur était capturée
+    // par le catch des dialogues et s'affichait dans la fenêtre.
+    final future = _chargerStats();
+    setState(() {
+      _stats = future;
+    });
   }
 
   // ── Identité ───────────────────────────────────────────────────────
@@ -614,12 +621,38 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                       erreur = 'Erreur : veuillez choisir une province');
                   return;
                 }
+                // Vérification « email déjà utilisé » : l'ajout d'un
+                // hôpital ne crée PAS de compte Auth, Firebase ne peut
+                // donc pas le rejeter lui-même. On vérifie dans Firestore
+                // qu'aucun utilisateur (admin, médecin, secrétaire,
+                // patient) ni aucun autre hôpital n'a déjà cet email.
+                final email = emailController.text.trim();
+                if (email.isNotEmpty) {
+                  final compteExistant = await _db
+                      .collection('users')
+                      .where('email', isEqualTo: email)
+                      .limit(1)
+                      .get();
+                  if (compteExistant.docs.isNotEmpty) {
+                    setDialogState(() => erreur = 'Erreur : email déjà utilisé');
+                    return;
+                  }
+                  final hopitalExistant = await _db
+                      .collection('hopitaux')
+                      .where('email', isEqualTo: email)
+                      .limit(1)
+                      .get();
+                  if (hopitalExistant.docs.isNotEmpty) {
+                    setDialogState(() => erreur = 'Erreur : email déjà utilisé');
+                    return;
+                  }
+                }
                 try {
                   await _db.collection('hopitaux').add({
                     'nom': nomController.text,
                     'adresse': adresseController.text,
                     'telephone': telephoneController.text,
-                    'email': emailController.text,
+                    'email': email,
                     'province': selectedProvince,
                   });
                   _rafraichirStats();

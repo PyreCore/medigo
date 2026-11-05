@@ -89,7 +89,12 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
 
   void _rafraichirStats() {
     if (!mounted) return;
-    setState(() => _stats = _chargerStats());
+    // Même correctif que dans admin_dashboard : une fermeture flèche
+    // renverrait le Future de l'assignation, ce que setState refuse.
+    final future = _chargerStats();
+    setState(() {
+      _stats = future;
+    });
   }
 
   // ── Identité ───────────────────────────────────────────────────────
