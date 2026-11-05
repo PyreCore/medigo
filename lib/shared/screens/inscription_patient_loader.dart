@@ -91,7 +91,9 @@ class _InscriptionPatientLoaderState extends State<InscriptionPatientLoader> {
   String _messageAuth(FirebaseAuthException e) {
     switch (e.code) {
       case 'email-already-in-use':
-        return 'Cet email est déjà utilisé par un autre compte';
+        // Formulation identique aux fenêtres admin (« Erreur : email
+        // déjà utilisé » en rouge dans le formulaire).
+        return 'Erreur : email déjà utilisé';
       case 'invalid-email':
         return 'Cet email n\'est pas valide';
       case 'weak-password':

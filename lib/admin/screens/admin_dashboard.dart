@@ -543,6 +543,9 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
     final telephoneController = TextEditingController();
     final emailController = TextEditingController();
     String? selectedProvince;
+    // Message d'erreur affiché EN ROUGE dans la fenêtre, au lieu d'une
+    // notification discrète que l'admin ne voit pas.
+    String? erreur;
 
     showDialog(
       context: context,
@@ -553,6 +556,23 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Erreur placée EN HAUT de la fenêtre : visible même si
+                // le contenu défile plus bas.
+                if (erreur != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        erreur!,
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                 TextField(
                   controller: nomController,
                   decoration: const InputDecoration(labelText: 'Nom'),
@@ -590,22 +610,26 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
             ElevatedButton(
               onPressed: () async {
                 if (selectedProvince == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Veuillez choisir une province'),
-                    ),
-                  );
+                  setDialogState(() =>
+                      erreur = 'Erreur : veuillez choisir une province');
                   return;
                 }
-                await _db.collection('hopitaux').add({
-                  'nom': nomController.text,
-                  'adresse': adresseController.text,
-                  'telephone': telephoneController.text,
-                  'email': emailController.text,
-                  'province': selectedProvince,
-                });
-                _rafraichirStats();
-                if (mounted) Navigator.pop(context);
+                try {
+                  await _db.collection('hopitaux').add({
+                    'nom': nomController.text,
+                    'adresse': adresseController.text,
+                    'telephone': telephoneController.text,
+                    'email': emailController.text,
+                    'province': selectedProvince,
+                  });
+                  _rafraichirStats();
+                  if (mounted) Navigator.pop(context);
+                } catch (e) {
+                  // AVANT : aucune gestion d'erreur — l'écriture refusée
+                  // laissait la fenêtre muette. Message rouge dans la
+                  // fenêtre, toujours visible.
+                  setDialogState(() => erreur = 'Erreur : $e');
+                }
               },
               child: const Text('Ajouter'),
             ),

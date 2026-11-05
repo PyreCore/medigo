@@ -93,7 +93,8 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
     final telephone = _controllerTelephone.text.trim();
 
     // On regroupe les vérifications pour n'afficher qu'un seul message
-    // à l'utilisateur plutôt que trois SnackBars successives.
+    // à l'utilisateur, EN ROUGE dans le formulaire, plutôt que trois
+    // notifications successives.
     if (nom.isEmpty || prenom.isEmpty || telephone.isEmpty) {
       _signaler('Merci de renseigner nom, prénom et téléphone');
       return;
@@ -111,6 +112,9 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
       return;
     }
 
+    // Champs corrects : on efface l'erreur locale du formulaire.
+    setState(() => _erreurLocale = null);
+
     final groupeSanguin = _controllerGroupeSanguin.text.trim();
     widget.onValider?.call(
       nom: nom,
@@ -123,12 +127,20 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
     );
   }
 
+  // Erreur de VALIDATION du formulaire (champs manquants, mot de passe
+  // incomplet) : affichée EN ROUGE dans le formulaire, plus de SnackBar.
+  String? _erreurLocale;
+
   void _signaler(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _erreurLocale = message);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Liste unifiée : erreur renvoyée par le parent (création du compte,
+    // ex : « Erreur : email déjà utilisé ») ou locale (validation des
+    // champs). En rouge dans le formulaire, plus de SnackBar.
+    final erreurAffichee = widget.erreur ?? _erreurLocale;
     return Scaffold(
       appBar: AppBar(title: const Text('Créer un compte patient')),
       body: ListView(
@@ -208,14 +220,19 @@ class _InscriptionPatientScreenState extends State<InscriptionPatientScreen> {
               border: OutlineInputBorder(),
             ),
           ),
-          // Erreur renvoyée par le parent (ex: "email déjà utilisé"),
-          // affichée sous les champs plutôt qu'en SnackBar pour qu'elle
-          // reste visible.
-          if (widget.erreur != null) ...[
+          // Erreur affichée EN ROUGE sous les champs : elle reste
+          // visible dans le formulaire (plus de SnackBar).
+          if (erreurAffichee != null) ...[
             const SizedBox(height: 12),
-            Text(
-              widget.erreur!,
-              style: const TextStyle(color: Colors.red),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                erreurAffichee,
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 24),
