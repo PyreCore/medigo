@@ -710,9 +710,23 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                   });
                   _rafraichirStats();
                   if (mounted) Navigator.pop(context);
-                } catch (e) {
-                  debugPrint('Erreur: $e');
-                }
+                  } on FirebaseAuthException catch (e) {
+                    // AVANT : l'erreur était avalée (debugPrint invisible),
+                    // l'admin pensait que le bouton ne faisait rien. On
+                    // traduit le cas le plus fréquent et on l'affiche.
+                    if (!context.mounted) return;
+                    final message = e.code == 'email-already-in-use'
+                        ? 'Email déjà utilisé, veuillez choisir un autre'
+                        : 'Erreur: ${e.message}';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(message)),
+                    );
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur: $e')),
+                    );
+                  }
               },
               child: const Text('Créer'),
             ),
