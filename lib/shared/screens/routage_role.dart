@@ -82,8 +82,12 @@ class RoutageRole {
     final userData = await _donneesProfil(user.uid);
     if (!context.mounted) return false;
 
-    final ecran = ecranPourRole(role, userData);
-    if (ecran == null) return false;
+    final ecranBrut = ecranPourRole(role, userData);
+    if (ecranBrut == null) return false;
+    // L'espace est enveloppé : si l'utilisateur le quitte par le bouton
+    // "retour", la session est fermée (voir la documentation de la
+    // classe EspaceAvecRetourDeconnexion).
+    final ecran = EspaceAvecRetourDeconnexion(enfant: ecranBrut);
 
     // pushAndRemoveUntil : l'accueil public ne doit pas rester dans la pile
     // sous l'espace privé, sinon le bouton "retour" renverrait à un écran
@@ -102,6 +106,44 @@ class RoutageRole {
         .doc(uid)
         .get();
     return doc.data() ?? const <String, dynamic>{};
+  }
+}
+
+/// Enveloppe partagée des espaces privés : si l'utilisateur QUITTE
+/// l'espace par le bouton "retour" du navigateur ou le geste système
+/// (téléphone), la session Firebase est fermée.
+///
+/// Fonctionnement : le bouton arrière du navigateur ou le geste système
+/// (téléphone) "pop" la route de l'espace ; l'écran révélé en dessous (écran de connexion, ou
+/// accueil public quand l'espace avait été ouvert directement) devient
+/// visible PENDANT que la déconnexion Firebase s'effectue. Aucune
+/// navigation supplémentaire n'est nécessaire : pas de reconnexion
+/// automatique nulle part, l'utilisateur voit donc bien un état
+/// déconnecté. L'écran de déconnexion volontaire du profil (bouton
+/// "Se déconnecter") ne passe PAS ici : il gère lui-même sa sortie.
+///
+/// REMARQUE : la déconnexion au retour reste "côté client" — elle
+/// ferme la session de ce navigateur. Le compte Firebase existe toujours :
+/// un pirate qui aurait le mot de passe peut se reconnecter. C'est la
+/// 2FA (en attente du nom de domaine) qui sécurisera ce point.
+class EspaceAvecRetourDeconnexion extends StatelessWidget {
+  final Widget enfant;
+
+  const EspaceAvecRetourDeconnexion({
+    super.key,
+    required this.enfant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      onPopInvokedWithResult: (popEffectif, result) {
+        if (popEffectif) {
+          FirebaseAuth.instance.signOut();
+        }
+      },
+      child: enfant,
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import '../../services/patient_service.dart';
 import '../../widgets/regle_mot_de_passe.dart';
 import 'inscription_patient_screen.dart';
 import '../../patient/screens/patient_home_loader.dart';
+import 'routage_role.dart';
 
 /// Écran "intermédiaire" de l'inscription : crée le compte puis affiche
 /// InscriptionPatientScreen, qui lui ne fait que du formulaire. Même
@@ -64,7 +65,11 @@ class _InscriptionPatientLoaderState extends State<InscriptionPatientLoader> {
         setState(() => _envoi = false);
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const PatientHomeLoader()),
+          MaterialPageRoute(
+            builder: (_) => EspaceAvecRetourDeconnexion(
+              enfant: const PatientHomeLoader(),
+            ),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {

@@ -71,14 +71,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // public, qui suppose l'utilisateur déconnecté). Conséquence en
       // pratique : le bouton "retour" depuis l'espace privé ramène à
       // l'écran de connexion — comme l'attendent les utilisateurs de
-      // téléphone, où il n'y a pas de rail de navigation. L'utilisateur
-      // reste connecté (les écrans espaces gardent leur bouton de
-      // déconnexion) ; se reconnecter ici rebascule simplement sur son
+      // téléphone, où il n'y a pas de rail de navigation — et, grâce à
+      // EspaceAvecRetourDeconnexion, l'utilisateur y est DÉCONNECTÉ :
+      // il retrouve un état propre, se reconnecter ici replace sur son
       // espace.
       final routeConnexion = ModalRoute.of(context);
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => ecran),
+        MaterialPageRoute(
+          builder: (_) => EspaceAvecRetourDeconnexion(enfant: ecran),
+        ),
         (route) => route == routeConnexion,
       );
     } on FirebaseAuthException {
