@@ -224,7 +224,14 @@ class _MessageEcranLarge extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: () {
+                // Retour à l'accueil : on DÉCONNECTE d'abord la session,
+                // comme le ferait le bouton "retour" du téléphone (voir
+                // EspaceAvecRetourDeconnexion). Sans ça, l'admin système
+                // bloqué sur mobile repartait de l'accueil public encore
+                // connecté à son compte.
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (!context.mounted) return;
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/',
