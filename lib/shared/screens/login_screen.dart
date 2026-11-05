@@ -66,14 +66,20 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // pushAndRemoveUntil : après connexion, l'accueil public ne doit plus
-      // rester dans la pile sous l'espace privé. Sinon le bouton "retour"
-      // depuis l'espace patient renverrait vers un écran d'accueil qui, lui,
-      // suppose encore qu'aucun espace n'est ouvert.
+      // pushAndRemoveUntil : on garde l'écran de connexion DANS la pile,
+      // et on ne supprime que ce qui se trouvait SOUS lui (l'accueil
+      // public, qui suppose l'utilisateur déconnecté). Conséquence en
+      // pratique : le bouton "retour" depuis l'espace privé ramène à
+      // l'écran de connexion — comme l'attendent les utilisateurs de
+      // téléphone, où il n'y a pas de rail de navigation. L'utilisateur
+      // reste connecté (les écrans espaces gardent leur bouton de
+      // déconnexion) ; se reconnecter ici rebascule simplement sur son
+      // espace.
+      final routeConnexion = ModalRoute.of(context);
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => ecran),
-        (route) => false,
+        (route) => route == routeConnexion,
       );
     } on FirebaseAuthException {
       // On masque volontairement le détail de l'erreur (Firebase renvoie
