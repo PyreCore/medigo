@@ -802,6 +802,10 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
     // Le bouton reste inactif tant que le mot de passe n'a pas ses 8
     // caractères, ses chiffres, sa casse et son caractère spécial.
     bool mdpValide = false;
+    // Message d'erreur affiché EN ROUGE dans la fenêtre (ex :
+    // « Erreur : email déjà utilisé ») au lieu d'une notification
+    // discrète que l'admin ne voit pas.
+    String? erreur;
 
     showDialog(
       context: context,
@@ -812,6 +816,23 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Erreur placée EN HAUT de la fenêtre : visible même si
+                // le contenu défile plus bas.
+                if (erreur != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        erreur!,
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                 TextField(
                   controller: prenomController,
                   decoration: const InputDecoration(labelText: 'Prénom'),
@@ -846,11 +867,9 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
               onPressed: !mdpValide
                   ? null
                   : () async {
-                final erreur = verifierMotDePasse(passwordController.text);
-                if (erreur != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(erreur)),
-                  );
+                final erreurMdp = verifierMotDePasse(passwordController.text);
+                if (erreurMdp != null) {
+                  setDialogState(() => erreur = erreurMdp);
                   return;
                 }
                 try {
@@ -873,18 +892,15 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                   _rafraichirStats();
                   if (mounted) Navigator.pop(context);
                 } on FirebaseAuthException catch (e) {
-                  if (!context.mounted) return;
-                  final message = e.code == 'email-already-in-use'
-                      ? 'Email déjà utilisé, veuillez choisir un autre'
-                      : 'Erreur: ${e.message}';
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(message)),
-                  );
+                  // Message ROUGE dans la fenêtre, toujours visible,
+                  // au lieu d'une notification en bas de l'écran.
+                  setDialogState(() {
+                    erreur = e.code == 'email-already-in-use'
+                        ? 'Erreur : email déjà utilisé'
+                        : 'Erreur : ${e.message}';
+                  });
                 } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Erreur: $e')),
-                  );
+                  setDialogState(() => erreur = 'Erreur : $e');
                 }
               },
               child: const Text('Créer'),
@@ -905,6 +921,10 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
     // Le bouton reste inactif tant que le mot de passe n'a pas ses 8
     // caractères, ses chiffres, sa casse et son caractère spécial.
     bool mdpValide = false;
+    // Message d'erreur affiché EN ROUGE dans la fenêtre (ex :
+    // « Erreur : email déjà utilisé ») au lieu d'une notification
+    // discrète que l'admin ne voit pas.
+    String? erreur;
 
     showDialog(
       context: context,
@@ -915,6 +935,23 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Erreur placée EN HAUT de la fenêtre : visible même si
+                // le contenu défile plus bas.
+                if (erreur != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        erreur!,
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                 TextField(
                   controller: prenomController,
                   decoration: const InputDecoration(labelText: 'Prénom'),
@@ -975,11 +1012,9 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
               onPressed: !mdpValide
                   ? null
                   : () async {
-                final erreur = verifierMotDePasse(passwordController.text);
-                if (erreur != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(erreur)),
-                  );
+                final erreurMdp = verifierMotDePasse(passwordController.text);
+                if (erreurMdp != null) {
+                  setDialogState(() => erreur = erreurMdp);
                   return;
                 }
                 try {
@@ -1011,8 +1046,17 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
 
                   _rafraichirStats();
                   if (mounted) Navigator.pop(context);
+                } on FirebaseAuthException catch (e) {
+                  // AVANT : l'erreur était avalée (debugPrint invisible),
+                  // l'admin pensait que le bouton ne faisait rien. Message
+                  // ROUGE dans la fenêtre, toujours visible.
+                  setDialogState(() {
+                    erreur = e.code == 'email-already-in-use'
+                        ? 'Erreur : email déjà utilisé'
+                        : 'Erreur : ${e.message}';
+                  });
                 } catch (e) {
-                  debugPrint('Erreur: $e');
+                  setDialogState(() => erreur = 'Erreur : $e');
                 }
               },
               child: const Text('Ajouter'),
