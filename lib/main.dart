@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
-import 'shared/screens/accueil_public_screen.dart';
+import 'patient/screens/espace_patient_visiteur.dart';
 import 'shared/screens/login_screen.dart';
 
 void main() async {
@@ -31,12 +31,12 @@ class MyApp extends StatelessWidget {
         // dans quel espace on se trouve.
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
       ),
-      // L'application s'ouvre sur l'accueil PUBLIC : un visiteur peut
-      // découvrir Medigo (hôpitaux, spécialités) sans avoir de compte.
-      // La connexion n'est demandée qu'au moment de réserver.
+      // L'application s'ouvre sur l'espace Patient en mode VISITEUR : on
+      // utilise l'application (hôpitaux, recherche, spécialités) sans
+      // compte. La connexion n'est demandée qu'au moment de réserver.
       initialRoute: '/',
       routes: {
-        '/': (context) => const AccueilPublicScreen(),
+        '/': (context) => const EspacePatientVisiteur(),
         '/login': (context) => const LoginScreen(),
       },
     );

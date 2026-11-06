@@ -8,7 +8,7 @@ Application mobile **Flutter** pour la gestion hospitalière : prise de rendez-v
 
 | Module | Rôle |
 | --- | --- |
-| `lib/shared/screens/accueil_public_screen.dart` | Accueil public : présentation, hôpitaux et catalogue des spécialités, sans compte |
+| `lib/patient/screens/espace_patient_visiteur.dart` | Premier écran : espace Patient en mode visiteur, utilisable sans compte (hôpitaux, recherche, spécialités) ; la réservation demande une connexion |
 | `lib/shared/screens/inscription_patient_screen.dart` | Inscription d'un patient (création du compte puis du dossier) |
 | `lib/patient/` | Espace patient : mes rendez-vous, demander / annuler / modifier un rendez-vous, profil |
 | `lib/secretaire/` | Espace secrétaire : dossier patients, confirmation et programmation des rendez-vous |
@@ -38,6 +38,21 @@ Le rôle est stocké dans le champ `role` du document `users/<uid>`, et dispatch
 
 Seul le patient s'inscrit seul : les autres comptes supposent qu'un administrateur a renseigné l'`hopitalId` du médecin ou du secrétaire.
 
+## Mode visiteur (sans connexion)
+
+Au lancement, l'application s'ouvre directement sur **l'espace Patient en mode visiteur** (`EspacePatientVisiteur`), avec la même barre de navigation que l'espace connecté :
+
+| Onglet | Visiteur (non connecté) |
+| --- | --- |
+| **Accueil** | Bienvenue, nombre d'hôpitaux et de spécialités, puces de spécialités (un appui affiche les hôpitaux qui la proposent), aperçu des hôpitaux |
+| **Hôpitaux** | Recherche par nom, ville ou téléphone, filtre par spécialité, fiche de chaque hôpital (adresse, téléphone, email, spécialités proposées) |
+| **Prendre RDV** | Verrouillé : explique que la réservation demande un compte, boutons « Se connecter » et « Créer un compte patient » |
+| **Profil** | « Visiteur » : connexion, inscription, et accès des professionnels (médecin, secrétaire, administrateur) |
+
+Tous les boutons de réservation (« Prendre rendez-vous », « Réserver », « Réserver dans cet hôpital ») passent par un seul contrôle, `_exigerConnexion` : un visiteur voit la fenêtre « Connexion requise », un utilisateur déjà connecté est envoyé vers son espace.
+
+Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` (`hopitaux`, `specialites`). La liste des médecins vient de `users`, réservée aux comptes connectés : elle n'apparaît qu'une fois connecté, dans le formulaire de rendez-vous.
+
 ## Structure
 
 ```
@@ -57,7 +72,7 @@ lib/
 ├── adminHopital/screens/        # Administration d'un hôpital
 ├── widgets/                     # PatientCard, RendezVousCard
 └── shared/                      # Écrans, modèles et services communs
-    ├── screens/                 # Accueil public, connexion, inscription, routage
+    ├── screens/                 # Connexion, inscription, routage
     └── models/hopital_model.dart
 ```
 
@@ -97,7 +112,7 @@ flutter test
 flutter analyze   # doit afficher « No issues found! »
 ```
 
-Au 6 novembre 2026 : **65 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
+Au 6 novembre 2026 : **74 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
 
 ## Organisation du travail
 
@@ -108,9 +123,9 @@ Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'appl
 | **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion | 15 |
 | **joworst-boy** | Espaces Médecin et Secrétaire (fonctions, notifications, responsive, design) | 11 |
 | **Andem** | Première version des espaces Médecin et Secrétaire | 1 |
-| **mvp** / **etoumbi9** | Espace Patient, accueil public, inscription, règles Firestore, rappels, README | 6 |
+| **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 9 |
 
-> `mvp` et `etoumbi9` désignent le même membre, qui a commité depuis deux configurations Git différentes.
+> `mvp`, `etoumbi9` et `PyreCore` désignent le même membre, qui a commité depuis plusieurs configurations Git différentes.
 
 ### Répartition par dossier
 
@@ -172,6 +187,9 @@ Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signal�
 | 05/11 11:42 | chris2007-t | `4f763d2` | **Erreur en rouge dans la fenêtre** lors de la création de comptes. |
 | 05/11 11:52 | chris2007-t | `aff9dda` | **Ajout d'hôpital et inscription patient** : erreurs affichées en rouge dans le formulaire. |
 | 05/11 12:04 | chris2007-t | `408ccf8` | **Ajout d'hôpital** : vérifie si l'email est déjà utilisé ; corrige un `setState` qui recevait une `Future` dans `_rafraichirStats`. |
+| 06/11 | PyreCore | `9a21ee1` | **Espace Patient : remarques d'analyse corrigées** (`withValues`, `'clé': ?valeur`) et section « Organisation du travail » du README. |
+| 06/11 | PyreCore | `ff2913e` | **17 remarques d'analyse restantes corrigées** (espaces admin, `patient_card.dart`) : `flutter analyze` à zéro. |
+| 06/11 | mvp | — | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
 
 ### Nettoyage de l'analyse (6 novembre 2026)
 
