@@ -566,7 +566,7 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
               'Aucun médecin ne correspond à cette recherche dans cet '
               'hôpital. Modifiez la spécialité ou le nom saisi.',
               style: TextStyle(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 fontSize: 12,
               ),
             ),

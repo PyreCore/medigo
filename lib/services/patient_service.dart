@@ -58,7 +58,7 @@ class PatientService {
         'telephone': telephone,
         if (dateNaissance != null)
           'dateNaissance': Timestamp.fromDate(dateNaissance),
-        if (groupeSanguin != null) 'groupeSanguin': groupeSanguin,
+        'groupeSanguin': ?groupeSanguin,
       });
 
       // 3. Dossier dans la collection "patients", rattaché au compte via
@@ -77,7 +77,7 @@ class PatientService {
         'userId': uid,
         if (dateNaissance != null)
           'dateNaissance': Timestamp.fromDate(dateNaissance),
-        if (groupeSanguin != null) 'groupeSanguin': groupeSanguin,
+        'groupeSanguin': ?groupeSanguin,
       });
     } catch (e) {
       // Si l'écriture Firestore échoue, on ANNULE tout ce qui vient d'être
@@ -348,7 +348,7 @@ class PatientService {
       'date': Timestamp.fromDate(date),
       'heure': heure,
       'statut': 'en_attente',
-      if (motif != null) 'motif': motif,
+      'motif': ?motif,
     });
 
     try {
@@ -382,7 +382,7 @@ class PatientService {
 
     await ref.update({
       'statut': 'annule',
-      if (motif != null) 'motifAnnulation': motif,
+      'motifAnnulation': ?motif,
     });
 
     // Un créneau libéré n'est plus occupé : sans ça, l'heure annulée
@@ -419,7 +419,7 @@ class PatientService {
       // Le RDV n'ayant pas encore été accepté, il redevient "en_attente"
       // pour repasser dans la file de validation de la secrétaire.
       'statut': 'en_attente',
-      if (motif != null) 'motif': motif,
+      'motif': ?motif,
       'datePrecendente':
           ancienneDate is Timestamp ? ancienneDate : FieldValue.delete(),
       'heurePrecedente': data['heure'] ?? FieldValue.delete(),
