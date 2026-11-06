@@ -118,14 +118,12 @@ Au 6 novembre 2026 : **74 tests passent** et `flutter analyze` affiche **« No i
 
 Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'application.
 
-<!-- membres:debut -->
-| Membre (identifiant Git) | Partie | Commits |
+| Membre (identifiant Git) | Partie | Commits (au 6 novembre) |
 | --- | --- | --- |
 | **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion, site admin dédié | 17 |
 | **joworst-boy** | Espaces Médecin et Secrétaire (fonctions, notifications, responsive, design) | 11 |
 | **Andem** | Première version des espaces Médecin et Secrétaire | 1 |
 | **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 12 |
-<!-- membres:fin -->
 
 > `mvp`, `etoumbi9` et `PyreCore` désignent le même membre, qui a commité depuis plusieurs configurations Git différentes.
 
@@ -142,16 +140,8 @@ Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'appl
 
 Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signalés mais n'apportent pas de code nouveau.
 
-**Mettre à jour l'historique et le nombre de commits par membre** (depuis la racine du projet, après un `git pull`) :
+Historique arrêté au 6 novembre 2026. L'historique complet et toujours à jour se consulte sur GitHub : [github.com/PyreCore/medigo/commits/master](https://github.com/PyreCore/medigo/commits/master).
 
-```bash
-dart run tool/historique.dart             # met à jour le README
-dart run tool/historique.dart --verifier  # échoue si le README n'est pas à jour
-```
-
-Le script lit `git log` et réécrit uniquement ce qui se trouve entre les repères `<!-- historique:… -->` et `<!-- membres:… -->`. Les descriptions déjà rédigées sont conservées. Un nouveau commit reçoit son titre en gras, qu'on peut ensuite détailler à la main. Un nouvel auteur Git est ajouté au tableau des membres avec une partie « à compléter ».
-
-<!-- historique:debut -->
 
 #### Septembre 2026 — Mise en place
 
@@ -206,11 +196,9 @@ Le script lit `git log` et réécrit uniquement ce qui se trouve entre les repè
 | 06/11 12:28 | chris2007-t | `6306f5c` | **Connexion exclusive de l'admin système** sur le site dédié (`login_admin_systeme_screen.dart`), refusée sur le site public. |
 | 06/11 12:32 | PyreCore | `06581ce` | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
 | 06/11 12:35 | PyreCore | `0efa8cc` | **README** : historique à jour (site admin dédié, mode visiteur, heures et nombre de commits par membre). |
-| 06/11 12:40 | PyreCore | `fb18eef` | **README : ajouter le commit 0efa8cc a l'historique** |
-| 06/11 12:45 | PyreCore | `2c666dd` | **Script `tool/historique.dart`** : historique et nombre de commits par membre générés depuis `git log`, descriptions existantes conservées. |
-<!-- historique:fin -->
+| 06/11 12:40 | PyreCore | `fb18eef` | **README** : ajout du commit `0efa8cc` à l'historique. |
+| 06/11 12:45 | PyreCore | `2c666dd` | **Script `tool/historique.dart`** : historique et nombre de commits par membre générés depuis `git log`, descriptions existantes conservées (script retiré ensuite : GitHub affiche déjà l'historique). |
 
-> Le commit qui contient une mise à jour de l'historique n'y figure pas encore lui-même (il ne peut pas connaître son propre identifiant) : il apparaîtra au prochain lancement du script.
 
 ### Nettoyage de l'analyse (6 novembre 2026)
 
