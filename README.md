@@ -123,7 +123,7 @@ Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'appl
 | **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion, site admin dédié | 17 |
 | **joworst-boy** | Espaces Médecin et Secrétaire (fonctions, notifications, responsive, design) | 11 |
 | **Andem** | Première version des espaces Médecin et Secrétaire | 1 |
-| **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 9 |
+| **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 10 |
 
 > `mvp`, `etoumbi9` et `PyreCore` désignent le même membre, qui a commité depuis plusieurs configurations Git différentes.
 
@@ -192,6 +192,9 @@ Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signal�
 | 06/11 12:02 | chris2007-t | `782b9fc` | **Site admin dédié** : second site Firebase Hosting (`medigo-f2fd5-admin.web.app`) et point d'entrée `lib/main_admin.dart`. |
 | 06/11 12:28 | chris2007-t | `6306f5c` | **Connexion exclusive de l'admin système** sur le site dédié (`login_admin_systeme_screen.dart`), refusée sur le site public. |
 | 06/11 12:32 | PyreCore | `06581ce` | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
+| 06/11 12:35 | PyreCore | `0efa8cc` | **README** : historique à jour (site admin dédié, mode visiteur, heures et nombre de commits par membre). |
+
+> Les commits qui ne font qu'ajouter des lignes à cet historique n'y figurent pas eux-mêmes : un commit ne peut pas contenir son propre identifiant.
 
 ### Nettoyage de l'analyse (6 novembre 2026)
 
