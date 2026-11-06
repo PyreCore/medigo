@@ -120,7 +120,7 @@ Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'appl
 
 | Membre (identifiant Git) | Partie | Commits |
 | --- | --- | --- |
-| **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion | 15 |
+| **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion, site admin dédié | 17 |
 | **joworst-boy** | Espaces Médecin et Secrétaire (fonctions, notifications, responsive, design) | 11 |
 | **Andem** | Première version des espaces Médecin et Secrétaire | 1 |
 | **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 9 |
@@ -176,7 +176,7 @@ Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signal�
 | 23/10 14:23 | joworst-boy | `7cf918e` | **Design maquette** : navigation en dégradé, formulaires validés, filtres de l'espace médecin. |
 | 26/10 19:34 | chris2007-t | `35094bd` | **Espaces admin en violet**, page profil, règles de mot de passe, correction des fenêtres invisibles. |
 
-#### Novembre 2026 — Navigation et messages d'erreur
+#### Novembre 2026 — Navigation, messages d'erreur, site admin et mode visiteur
 
 | Date | Auteur | Commit | Contenu |
 | --- | --- | --- | --- |
@@ -187,9 +187,11 @@ Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signal�
 | 05/11 11:42 | chris2007-t | `4f763d2` | **Erreur en rouge dans la fenêtre** lors de la création de comptes. |
 | 05/11 11:52 | chris2007-t | `aff9dda` | **Ajout d'hôpital et inscription patient** : erreurs affichées en rouge dans le formulaire. |
 | 05/11 12:04 | chris2007-t | `408ccf8` | **Ajout d'hôpital** : vérifie si l'email est déjà utilisé ; corrige un `setState` qui recevait une `Future` dans `_rafraichirStats`. |
-| 06/11 | PyreCore | `9a21ee1` | **Espace Patient : remarques d'analyse corrigées** (`withValues`, `'clé': ?valeur`) et section « Organisation du travail » du README. |
-| 06/11 | PyreCore | `ff2913e` | **17 remarques d'analyse restantes corrigées** (espaces admin, `patient_card.dart`) : `flutter analyze` à zéro. |
-| 06/11 | mvp | — | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
+| 06/11 11:34 | PyreCore | `9a21ee1` | **Espace Patient : remarques d'analyse corrigées** (`withValues`, `'clé': ?valeur`) et section « Organisation du travail » du README. |
+| 06/11 11:55 | PyreCore | `ff2913e` | **17 remarques d'analyse restantes corrigées** (espaces admin, `patient_card.dart`) : `flutter analyze` à zéro. |
+| 06/11 12:02 | chris2007-t | `782b9fc` | **Site admin dédié** : second site Firebase Hosting (`medigo-f2fd5-admin.web.app`) et point d'entrée `lib/main_admin.dart`. |
+| 06/11 12:28 | chris2007-t | `6306f5c` | **Connexion exclusive de l'admin système** sur le site dédié (`login_admin_systeme_screen.dart`), refusée sur le site public. |
+| 06/11 12:32 | PyreCore | `06581ce` | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
 
 ### Nettoyage de l'analyse (6 novembre 2026)
 
