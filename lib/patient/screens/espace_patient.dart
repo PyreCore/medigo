@@ -3,6 +3,7 @@ import '../../models/medecin.dart';
 import '../../models/patient.dart';
 import '../../models/rendez_vous.dart';
 import '../../shared/models/hopital_model.dart';
+import '../reservation_en_attente.dart';
 import 'accueil_patient.dart';
 import 'liste_rendez_vous_patient.dart';
 import 'detail_rendez_vous_patient.dart';
@@ -24,6 +25,10 @@ class EspacePatient extends StatefulWidget {
   final List<RendezVous> rendezVous; // tous les rendez-vous du patient
   final List<RendezVous> rendezVousDuJour; // sous-ensemble pour l'accueil
   final Map<String, int> statistiques;
+
+  // Réservation commencée en mode visiteur : l'espace s'ouvre alors sur
+  // l'onglet Prendre RDV, formulaire pré-rempli.
+  final ReservationEnAttente? reservationReprise;
 
   // Callbacks transmis par le parent : EspacePatient ne fait que les
   // relayer aux bons écrans, sans savoir s'ils parlent à Firestore ou
@@ -52,6 +57,7 @@ class EspacePatient extends StatefulWidget {
     required this.rendezVous,
     required this.rendezVousDuJour,
     this.statistiques = const {},
+    this.reservationReprise,
     this.onRafraichir,
     this.onDemanderRendezVous,
     this.onAnnulerRendezVous,
@@ -68,6 +74,21 @@ class _EspacePatientState extends State<EspacePatient> {
   // Index de l'onglet actuellement affiché : 0 = Accueil,
   // 1 = Mes rendez-vous, 2 = Prendre rendez-vous, 3 = Profil.
   int _ongletActif = 0;
+
+  // Réservation reprise du mode visiteur, effacée dès qu'elle est envoyée.
+  ReservationEnAttente? _reservationReprise;
+
+  // Incrémenté après chaque envoi : la clé du formulaire change, il repart
+  // donc vide. Sans cela, revenir sur l'onglet montrerait la demande déjà
+  // envoyée, prête à être renvoyée une seconde fois.
+  int _versionFormulaire = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _reservationReprise = widget.reservationReprise;
+    if (_reservationReprise != null) _ongletActif = 2;
+  }
 
   // Rendez-vous en cours de reprogrammation, non null = le formulaire de
   // l'onglet 2 est en mode édition. Mémorisé ici (et non dans le formulaire)
@@ -145,10 +166,11 @@ class _EspacePatientState extends State<EspacePatient> {
         // State du formulaire garderait l'ancien pré-remplissage.
         key: ValueKey(
           _rdvAModifier == null
-              ? 'nouveau'
+              ? 'nouveau-$_versionFormulaire'
               : 'modif-${_rdvAModifier!.id}',
         ),
         rendezVousAModifier: _rdvAModifier,
+        reservationReprise: _rdvAModifier == null ? _reservationReprise : null,
         onValider: widget.onDemanderRendezVous == null
             ? null
             : ({
@@ -167,7 +189,11 @@ class _EspacePatientState extends State<EspacePatient> {
                 // sa nouvelle demande (le loader a rafraîchi les données
                 // entre-temps). Sans ça, il resterait sur un formulaire
                 // vide et croirait que l'envoi a échoué.
-                setState(() => _ongletActif = 0);
+                setState(() {
+                  _ongletActif = 0;
+                  _reservationReprise = null;
+                  _versionFormulaire++;
+                });
               },
         onValiderModification:
             widget.onModifierRendezVous == null || _rdvAModifier == null

@@ -10,6 +10,7 @@ import '../../models/rendez_vous.dart';
 import '../../services/patient_service.dart';
 import '../../shared/models/hopital_model.dart';
 import '../../services/notification_service.dart';
+import '../reservation_en_attente.dart';
 import 'espace_patient.dart';
 
 /// Écran "intermédiaire" affiché juste après la connexion d'un patient :
@@ -40,6 +41,11 @@ class _PatientHomeLoaderState extends State<PatientHomeLoader> {
   // chargés par le formulaire de réservation au moment où le patient en
   // désigne un.
   List<Hopital> _hopitaux = [];
+
+  // Réservation commencée en mode visiteur juste avant la connexion (ou
+  // l'inscription). Reprise UNE fois, à l'ouverture de l'espace : les
+  // rechargements suivants (_charger) ne la ramènent pas.
+  final ReservationEnAttente? _reservationReprise = ReservationEnAttente.reprendre();
 
   @override
   void initState() {
@@ -204,6 +210,7 @@ class _PatientHomeLoaderState extends State<PatientHomeLoader> {
       rendezVous: _rendezVous,
       rendezVousDuJour: _rendezVousDuJour,
       statistiques: _stats,
+      reservationReprise: _reservationReprise,
       onRafraichir: _charger,
       onDemanderRendezVous: _demanderRendezVous,
       onAnnulerRendezVous: _annulerRendezVous,

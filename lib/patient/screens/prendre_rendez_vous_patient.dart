@@ -6,6 +6,7 @@ import '../../models/rendez_vous.dart';
 import '../../shared/models/hopital_model.dart';
 import '../../services/disponibilite_service.dart';
 import '../../services/patient_service.dart';
+import '../reservation_en_attente.dart';
 
 /// Onglet "Prendre rendez-vous" : formulaire de demande.
 ///
@@ -62,6 +63,17 @@ class PrendreRendezVousPatient extends StatefulWidget {
   // Ignoré en reprogrammation.
   final Hopital? hopitalInitial;
 
+  // Réservation commencée en mode visiteur, reprise après la connexion :
+  // le formulaire s'ouvre entièrement rempli (hôpital, médecin, date,
+  // créneau, motif). Ignorée en reprogrammation.
+  final ReservationEnAttente? reservationReprise;
+
+  // Sources des disponibilités et des heures déjà prises d'un médecin. Par
+  // défaut Firestore ; remplaçables pour les tests widget.
+  final Future<List<Disponibilite>> Function(String medecinId)? chargerDisponibilites;
+  final Future<List<String>> Function(String medecinId, DateTime date)?
+  chargerHeuresOccupees;
+
   const PrendreRendezVousPatient({
     super.key,
     required this.hopitaux,
@@ -71,6 +83,9 @@ class PrendreRendezVousPatient extends StatefulWidget {
     this.chargerMedecins,
     this.chargerSpecialites,
     this.hopitalInitial,
+    this.reservationReprise,
+    this.chargerDisponibilites,
+    this.chargerHeuresOccupees,
   });
 
   @override
@@ -100,6 +115,10 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
   List<Medecin> _medecins = [];
   List<Specialite> _specialites = [];
   bool _chargementCatalogue = false;
+
+  // Vrai quand le formulaire a été pré-rempli par une réservation
+  // commencée en mode visiteur : un bandeau le signale au patient.
+  bool _reservationReprise = false;
 
   // Heure choisie : ce n'est plus une TimeOfDay libre mais un CRÉNEAU texte
   // ("09:30") issu de la liste réelle des disponibilités.
@@ -139,9 +158,41 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
       // lire les disponibilités et les heures déjà prises. Sans lui, il sort
       // immédiatement et l'écran affiche « pas de disponibilité ce jour-là ».
       _chargerMedecinEdition(rdv);
+    } else if (widget.reservationReprise != null) {
+      _reprendreReservation(widget.reservationReprise!);
     } else if (widget.hopitalInitial != null &&
         widget.hopitaux.contains(widget.hopitalInitial)) {
       _chargerCatalogueHopital(widget.hopitalInitial!);
+    }
+  }
+
+  /// Remplit le formulaire avec la réservation commencée en visiteur.
+  ///
+  /// Chaque étape est revérifiée, car du temps a passé depuis : le médecin
+  /// doit toujours exercer dans l'hôpital, et le créneau doit toujours être
+  /// libre. Si ce n'est plus le cas, le patient garde tout le reste et n'a
+  /// que ce choix-là à refaire.
+  Future<void> _reprendreReservation(ReservationEnAttente r) async {
+    if (!widget.hopitaux.contains(r.hopital)) return;
+    _controllerMotif.text = r.motif ?? '';
+    setState(() {
+      _reservationReprise = true;
+      _dateChoisie = r.date;
+    });
+
+    await _chargerCatalogueHopital(r.hopital, medecinId: r.medecin.id);
+    if (!mounted) return;
+    if (_medecinChoisi == null) {
+      _signaler('Ce médecin n\'est plus disponible : choisissez-en un autre.');
+      return;
+    }
+
+    await _chargerCreneaux();
+    if (!mounted) return;
+    if (_creneaux.contains(r.heure)) {
+      setState(() => _creneauChoisi = r.heure);
+    } else {
+      _signaler('Le créneau de ${r.heure} n\'est plus libre : choisissez-en un autre.');
     }
   }
 
@@ -194,7 +245,11 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
   /// Tous les choix aval sont invalués : la spécialité retenue peut ne pas
   /// exister dans le nouvel hôpital, et le médecin choisi peut ne plus y
   /// travailler. Le créneau part avec, puisqu'il dépendait de ce médecin.
-  Future<void> _chargerCatalogueHopital(Hopital hopital) async {
+  ///
+  /// [medecinId] pré-sélectionne un médecin dès que la liste est chargée, s'il
+  /// y figure. Il est posé dans la MÊME mise à jour que la liste : la liste
+  /// déroulante ne lit sa valeur qu'à sa création.
+  Future<void> _chargerCatalogueHopital(Hopital hopital, {String? medecinId}) async {
     setState(() {
       _hopitalChoisi = hopital;
       _specialiteChoisie = null;
@@ -212,10 +267,15 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
         (widget.chargerSpecialites ?? _patientService.getSpecialites)(hopital.id),
       ]);
       if (!mounted) return;
+      final medecins = resultats[0] as List<Medecin>;
       setState(() {
-        _medecins = resultats[0] as List<Medecin>;
+        _medecins = medecins;
         _specialites = resultats[1] as List<Specialite>;
         _chargementCatalogue = false;
+        if (medecinId != null) {
+          final trouves = medecins.where((m) => m.id == medecinId);
+          _medecinChoisi = trouves.isEmpty ? null : trouves.first;
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -291,17 +351,20 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
     setState(() => _chargementCreneaux = true);
 
     try {
-      final dispos = await _dispoService.getDisponibilites(medecin.id);
+      final dispos = await (widget.chargerDisponibilites ??
+          _dispoService.getDisponibilites)(medecin.id);
       final jour = Disponibilite.jourDeLaSemaine(date);
       final duJour = DisponibiliteService.pourJour(dispos, jour);
 
       // En mode édition on ignore l'occupation du rendez-vous qu'on est en
       // train de reprogrammer : sinon son propre créneau apparaîtrait pris et
       // le patient ne pourrait pas le conserver.
-      var occupees = await _patientService.getHeuresOccupees(
-        medecinId: medecin.id,
-        date: date,
-      );
+      var occupees = widget.chargerHeuresOccupees != null
+          ? await widget.chargerHeuresOccupees!(medecin.id, date)
+          : await _patientService.getHeuresOccupees(
+              medecinId: medecin.id,
+              date: date,
+            );
       final rdv = widget.rendezVousAModifier;
       if (rdv != null &&
           rdv.medecinId == medecin.id &&
@@ -455,6 +518,30 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
       children: [
         if (rdv != null) _BandeauEdition(rdv: rdv),
         if (rdv != null) const SizedBox(height: 16),
+        if (_reservationReprise) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFA5D6A7)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.restore, color: Color(0xFF2E7D32)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Votre réservation a été reprise. Vérifiez-la puis '
+                    'appuyez sur « Envoyer ma demande ».',
+                    style: TextStyle(color: Color(0xFF1B5E20)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Text(
           _modeEdition
               ? 'Choisissez une nouvelle date et un nouveau créneau.'

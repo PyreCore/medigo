@@ -53,6 +53,12 @@ Les boutons « Prendre rendez-vous », « Réserver » et « Réserver dans cet 
 
 Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` : `hopitaux`, `specialites`, `disponibilites`, `creneaux_occupes` et `medecins`. Les médecins viennent de `medecins` (`PatientService.getMedecinsPublics`) et non de `users`, réservée aux comptes connectés. Seuls le nom, le prénom et la spécialité sont repris, et l'identifiant utilisé est `userId`, l'uid du compte du médecin, sous lequel sont rangées ses disponibilités. Un médecin sans `userId` dans `medecins` n'apparaît pas pour les visiteurs.
 
+**Reprise de la réservation après connexion.** Quand le visiteur appuie sur « Envoyer ma demande », sa réservation (hôpital, médecin, date, créneau, motif) est gardée en mémoire par `ReservationEnAttente` (`lib/patient/reservation_en_attente.dart`). Après la connexion ou l'inscription, `PatientHomeLoader` la reprend : l'espace s'ouvre sur l'onglet « Prendre RDV », formulaire pré-rempli, et le patient n'a plus qu'à envoyer. L'écran de connexion n'est pas modifié.
+
+- La réservation n'est reprise qu'**une fois**, et expire au bout de **30 minutes** : un téléphone partagé ne la propose pas au compte suivant. « Plus tard » l'efface.
+- Le médecin et le créneau sont **revérifiés** à la reprise : si le créneau a été pris entre-temps, ou si le médecin n'exerce plus, un message le signale et seul ce choix est à refaire.
+- Elle vit en mémoire seulement : fermer l'application l'efface.
+
 ## Structure
 
 ```
@@ -112,7 +118,7 @@ flutter test
 flutter analyze   # doit afficher « No issues found! »
 ```
 
-Au 6 novembre 2026 : **76 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
+Au 6 novembre 2026 : **82 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
 
 ## Organisation du travail
 

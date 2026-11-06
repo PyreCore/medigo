@@ -8,6 +8,7 @@ import '../../shared/services/firestore_service.dart';
 import '../../shared/screens/inscription_patient_loader.dart';
 import '../../shared/screens/login_screen.dart';
 import '../../shared/screens/routage_role.dart';
+import '../reservation_en_attente.dart';
 import 'prendre_rendez_vous_patient.dart';
 
 /// Espace Patient en mode VISITEUR : c'est le premier écran de
@@ -210,8 +211,8 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
         title: const Text('Connexion requise'),
         content: const Text(
           'Pour envoyer votre demande de rendez-vous, connectez-vous ou '
-          'créez votre compte patient. C\'est gratuit et ne prend qu\'une '
-          'minute.',
+          'créez votre compte patient. Vos choix sont conservés : vous les '
+          'retrouverez remplis dans votre espace.',
         ),
         actions: [
           TextButton(
@@ -230,6 +231,9 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
         ],
       ),
     );
+    // « Plus tard » : le visiteur renonce, sa réservation ne doit pas
+    // ressurgir s'il se connecte plus tard pour une autre raison.
+    if (intention == null) ReservationEnAttente.oublier();
     if (!mounted) return;
     if (intention == 'connexion') _ouvrirConnexion();
     if (intention == 'inscription') _ouvrirInscription();
@@ -462,6 +466,18 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
             chargerSpecialites: (id) async =>
                 _specialites.where((s) => s.hopitalId == id).toList(),
             onValider: ({required medecin, required date, required heure, motif}) {
+              // La réservation est gardée AVANT la connexion : l'espace
+              // patient la reprendra pré-remplie une fois connecté.
+              final hopitaux = _hopitaux.where((h) => h.id == medecin.hopitalId);
+              if (hopitaux.isNotEmpty) {
+                ReservationEnAttente.garder(ReservationEnAttente(
+                  hopital: hopitaux.first,
+                  medecin: medecin,
+                  date: date,
+                  heure: heure,
+                  motif: motif,
+                ));
+              }
               _exigerConnexion();
             },
           ),
