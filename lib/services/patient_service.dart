@@ -218,6 +218,43 @@ class PatientService {
         .toList();
   }
 
+  /// Médecins d'un hôpital, lisibles SANS compte (mode visiteur).
+  ///
+  /// `users` n'est lisible que par un compte connecté : le visiteur lit
+  /// donc la collection `medecins`, ouverte en lecture par firestore.rules,
+  /// que l'administrateur remplit en même temps que le compte du médecin.
+  ///
+  /// L'id retenu est `userId`, l'uid du COMPTE du médecin, et non l'id du
+  /// document `medecins` : c'est sous cet uid que sont rangées ses
+  /// disponibilités et ses créneaux occupés. Un document sans `userId`
+  /// (créé avant ce champ) est écarté, ses créneaux seraient introuvables.
+  ///
+  /// Seuls le nom, le prénom et la spécialité sont repris : l'email et le
+  /// téléphone du médecin n'ont rien à faire dans l'écran d'un visiteur.
+  /// Un seul filtre d'égalité : aucun index composite n'est nécessaire.
+  Future<List<Medecin>> getMedecinsPublics(String hopitalId) async {
+    final snapshot = await _db
+        .collection('medecins')
+        .where('hopitalId', isEqualTo: hopitalId)
+        .get();
+
+    final liste = <Medecin>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final uid = data['userId']?.toString() ?? '';
+      if (uid.isEmpty) continue;
+      liste.add(Medecin.fromJson({
+        'id': uid,
+        'nom': data['nom'],
+        'prenom': data['prenom'],
+        'specialiteId': data['specialiteId'],
+        'hopitalId': hopitalId,
+      }));
+    }
+    liste.sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
+    return liste;
+  }
+
   /// Les heures déjà réservées chez un médecin pour une date donnée.
   ///
   /// Version corrigée : lit dans une collection dédiée "creneaux_occupes",

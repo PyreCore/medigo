@@ -1,37 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../models/medecin.dart';
 import '../../models/specialite.dart';
+import '../../services/patient_service.dart';
 import '../../shared/models/hopital_model.dart';
 import '../../shared/services/firestore_service.dart';
 import '../../shared/screens/inscription_patient_loader.dart';
 import '../../shared/screens/login_screen.dart';
 import '../../shared/screens/routage_role.dart';
+import 'prendre_rendez_vous_patient.dart';
 
 /// Espace Patient en mode VISITEUR : c'est le premier écran de
 /// l'application, affiché sans connexion.
 ///
 /// Le visiteur utilise l'application comme un patient — même barre de
-/// navigation, mêmes couleurs que EspacePatient — mais seulement pour ce qui
-/// ne demande pas de compte : parcourir les hôpitaux, chercher un
-/// établissement, voir ses spécialités. Tout ce qui RÉSERVE (bouton
-/// « Prendre rendez-vous », « Réserver » d'un hôpital, onglet Prendre RDV)
-/// passe par [_exigerConnexion], seul point de contrôle de l'accès.
+/// navigation, mêmes couleurs que EspacePatient. Il peut tout CONSULTER :
+/// hôpitaux, spécialités, médecins, et même le formulaire de réservation
+/// complet avec les créneaux libres. Seul l'ENVOI de la demande exige un
+/// compte : le bouton « Envoyer ma demande » passe par [_exigerConnexion],
+/// seul point de contrôle de l'accès.
 ///
 /// Les lectures se limitent aux collections ouvertes en lecture anonyme par
-/// firestore.rules (`hopitaux`, `specialites`). La liste des médecins vient
-/// de `users`, réservée aux comptes connectés : elle n'apparaît donc
-/// qu'une fois dans l'espace patient connecté.
+/// firestore.rules : `hopitaux`, `specialites`, `medecins` (au lieu de
+/// `users`, réservée aux comptes connectés), `disponibilites` et
+/// `creneaux_occupes`.
 class EspacePatientVisiteur extends StatefulWidget {
   // Sources de données injectables, pour les tests : par défaut, Firestore
   // et FirebaseAuth. Un test widget n'initialise pas Firebase.
   final Future<List<Hopital>> Function()? chargerHopitaux;
   final Future<List<Specialite>> Function()? chargerSpecialites;
+  final Future<List<Medecin>> Function(String hopitalId)? chargerMedecins;
   final bool Function()? estConnecte;
 
   const EspacePatientVisiteur({
     super.key,
     this.chargerHopitaux,
     this.chargerSpecialites,
+    this.chargerMedecins,
     this.estConnecte,
   });
 
@@ -47,6 +52,13 @@ const _bordureVerte = Color(0xFFC8E6C9);
 class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
   // 0 = Accueil, 1 = Hôpitaux, 2 = Prendre RDV, 3 = Profil.
   int _ongletActif = 0;
+
+  // Hôpital pré-sélectionné dans le formulaire (« Réserver » d'un hôpital).
+  Hopital? _hopitalReservation;
+
+  // Créé au premier appel seulement : un test widget n'initialise pas
+  // Firebase.
+  late final _patientService = PatientService();
 
   List<Hopital> _hopitaux = [];
   List<Specialite> _specialites = [];
@@ -139,6 +151,17 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
     }).toList();
   }
 
+  Future<List<Medecin>> _medecinsDe(String hopitalId) =>
+      (widget.chargerMedecins ?? _patientService.getMedecinsPublics)(hopitalId);
+
+  /// Ouvre l'onglet Prendre RDV, avec un hôpital déjà choisi ou non.
+  void _ouvrirReservation([Hopital? hopital]) {
+    setState(() {
+      _hopitalReservation = hopital;
+      _ongletActif = 2;
+    });
+  }
+
   void _voirHopitauxPour(String specialite) {
     setState(() {
       _specialiteFiltre = specialite;
@@ -170,8 +193,8 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
     }
   }
 
-  /// Point de contrôle UNIQUE de la réservation. Connecté : on ouvre son
-  /// espace, qui contient le formulaire de rendez-vous. Visiteur : on
+  /// Point de contrôle UNIQUE de l'envoi d'une demande. Connecté : on ouvre
+  /// son espace, qui contient le formulaire de rendez-vous. Visiteur : on
   /// explique pourquoi un compte est demandé, puis connexion ou inscription.
   Future<void> _exigerConnexion() async {
     if (_connecte) {
@@ -186,8 +209,9 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
         icon: const Icon(Icons.lock_outline, color: _vert, size: 40),
         title: const Text('Connexion requise'),
         content: const Text(
-          'Pour prendre un rendez-vous, connectez-vous ou créez votre compte '
-          'patient. C\'est gratuit et ne prend qu\'une minute.',
+          'Pour envoyer votre demande de rendez-vous, connectez-vous ou '
+          'créez votre compte patient. C\'est gratuit et ne prend qu\'une '
+          'minute.',
         ),
         actions: [
           TextButton(
@@ -219,9 +243,10 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
       builder: (context) => _DetailHopital(
         hopital: hopital,
         specialites: _specialitesDe(hopital),
+        medecins: _medecinsDe(hopital.id),
         onReserver: () {
           Navigator.pop(context);
-          _exigerConnexion();
+          _ouvrirReservation(hopital);
         },
       ),
     );
@@ -237,12 +262,7 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
     final onglets = [
       _ongletAccueil(connecte),
       _ongletHopitaux(),
-      _OngletReservationVerrouillee(
-        connecte: connecte,
-        onConnexion: _ouvrirConnexion,
-        onInscription: _ouvrirInscription,
-        onMonEspace: _ouvrirMonEspace,
-      ),
+      _ongletReservation(connecte),
       _OngletProfilVisiteur(
         connecte: connecte,
         onConnexion: _ouvrirConnexion,
@@ -313,7 +333,8 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
         children: [
           _BandeauBienvenue(
             connecte: connecte,
-            onPrendreRendezVous: _exigerConnexion,
+            onPrendreRendezVous:
+                connecte ? _ouvrirMonEspace : () => _ouvrirReservation(),
             onConnexion: _ouvrirConnexion,
             onInscription: _ouvrirInscription,
           ),
@@ -386,12 +407,66 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
                 hopital: h,
                 nbSpecialites: _specialitesDe(h).length,
                 onTap: () => _ouvrirDetailHopital(h),
-                onReserver: _exigerConnexion,
+                onReserver: () => _ouvrirReservation(h),
               ),
             ),
           ],
         ],
       ),
+    );
+  }
+
+  /// Onglet Prendre RDV : le VRAI formulaire, consultable sans compte.
+  /// Seul l'envoi de la demande demande une connexion.
+  Widget _ongletReservation(bool connecte) {
+    if (connecte) {
+      return _OngletReservationConnecte(onMonEspace: _ouvrirMonEspace);
+    }
+    if (_chargement) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_erreurCatalogue != null) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [_MessageInfo(_erreurCatalogue!)],
+      );
+    }
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          color: _vertClair,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: const Row(
+            children: [
+              Icon(Icons.visibility_outlined, size: 18, color: _vertFonce),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Mode visiteur : consultez librement les médecins et les '
+                  'créneaux. La connexion est demandée à l\'envoi.',
+                  style: TextStyle(fontSize: 12, color: _vertFonce),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: PrendreRendezVousPatient(
+            // Nouvelle clé à chaque hôpital pré-sélectionné : le formulaire
+            // repart de zéro avec cet hôpital.
+            key: ValueKey('visiteur-${_hopitalReservation?.id}'),
+            hopitaux: _hopitaux,
+            hopitalInitial: _hopitalReservation,
+            chargerMedecins: _medecinsDe,
+            chargerSpecialites: (id) async =>
+                _specialites.where((s) => s.hopitalId == id).toList(),
+            onValider: ({required medecin, required date, required heure, motif}) {
+              _exigerConnexion();
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -452,7 +527,7 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
                 hopital: h,
                 nbSpecialites: _specialitesDe(h).length,
                 onTap: () => _ouvrirDetailHopital(h),
-                onReserver: _exigerConnexion,
+                onReserver: () => _ouvrirReservation(h),
               ),
             ),
         ],
@@ -697,11 +772,13 @@ class _CarteHopital extends StatelessWidget {
 class _DetailHopital extends StatelessWidget {
   final Hopital hopital;
   final List<Specialite> specialites;
+  final Future<List<Medecin>> medecins;
   final VoidCallback onReserver;
 
   const _DetailHopital({
     required this.hopital,
     required this.specialites,
+    required this.medecins,
     required this.onReserver,
   });
 
@@ -748,6 +825,54 @@ class _DetailHopital extends StatelessWidget {
                   subtitle: s.description.isEmpty ? null : Text(s.description),
                 ),
               ),
+            const SizedBox(height: 12),
+            const Text(
+              'Médecins',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<Medecin>>(
+              future: medecins,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return const Text(
+                    'Liste des médecins indisponible pour le moment.',
+                    style: TextStyle(color: Colors.black54),
+                  );
+                }
+                final liste = snapshot.data ?? const <Medecin>[];
+                if (liste.isEmpty) {
+                  return const Text(
+                    'Aucun médecin n\'est encore enregistré dans cet hôpital.',
+                    style: TextStyle(color: Colors.black54),
+                  );
+                }
+                final noms = {for (final s in specialites) s.id: s.nom};
+                return Column(
+                  children: liste
+                      .map(
+                        (m) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const CircleAvatar(
+                            backgroundColor: _vertClair,
+                            child: Icon(Icons.person, color: _vert),
+                          ),
+                          title: Text(m.nomComplet),
+                          subtitle: noms[m.specialiteId] == null
+                              ? null
+                              : Text(noms[m.specialiteId]!),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -766,39 +891,20 @@ class _DetailHopital extends StatelessWidget {
   }
 }
 
-/// Onglet « Prendre RDV » d'un visiteur : la réservation demande un compte,
-/// on explique pourquoi et on propose les deux portes d'entrée.
-class _OngletReservationVerrouillee extends StatelessWidget {
-  final bool connecte;
-  final VoidCallback onConnexion;
-  final VoidCallback onInscription;
+/// Onglet « Prendre RDV » quand un compte est déjà connecté sur cet écran :
+/// la réservation se fait depuis son espace.
+class _OngletReservationConnecte extends StatelessWidget {
   final VoidCallback onMonEspace;
 
-  const _OngletReservationVerrouillee({
-    required this.connecte,
-    required this.onConnexion,
-    required this.onInscription,
-    required this.onMonEspace,
-  });
+  const _OngletReservationConnecte({required this.onMonEspace});
 
   @override
   Widget build(BuildContext context) {
     return _PanneauCentre(
-      icone: connecte ? Icons.event_available : Icons.lock_outline,
-      titre: connecte ? 'Vous êtes connecté' : 'Connectez-vous pour réserver',
-      texte: connecte
-          ? 'La prise de rendez-vous se fait depuis votre espace patient.'
-          : 'Une fois connecté, vous choisissez l\'hôpital, la spécialité, '
-              'le médecin et un créneau libre. Le médecin confirme ensuite '
-              'votre demande.',
-      actions: connecte
-          ? [
-              _BoutonPlein('Ouvrir mon espace', Icons.arrow_forward, onMonEspace),
-            ]
-          : [
-              _BoutonPlein('Se connecter', Icons.login, onConnexion),
-              _BoutonContour('Créer un compte patient', Icons.person_add_alt, onInscription),
-            ],
+      icone: Icons.event_available,
+      titre: 'Vous êtes connecté',
+      texte: 'La prise de rendez-vous se fait depuis votre espace patient.',
+      actions: [_BoutonPlein('Ouvrir mon espace', Icons.arrow_forward, onMonEspace)],
     );
   }
 }

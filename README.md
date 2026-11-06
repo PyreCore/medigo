@@ -45,13 +45,13 @@ Au lancement, l'application s'ouvre directement sur **l'espace Patient en mode v
 | Onglet | Visiteur (non connecté) |
 | --- | --- |
 | **Accueil** | Bienvenue, nombre d'hôpitaux et de spécialités, puces de spécialités (un appui affiche les hôpitaux qui la proposent), aperçu des hôpitaux |
-| **Hôpitaux** | Recherche par nom, ville ou téléphone, filtre par spécialité, fiche de chaque hôpital (adresse, téléphone, email, spécialités proposées) |
-| **Prendre RDV** | Verrouillé : explique que la réservation demande un compte, boutons « Se connecter » et « Créer un compte patient » |
+| **Hôpitaux** | Recherche par nom, ville ou téléphone, filtre par spécialité, fiche de chaque hôpital (adresse, téléphone, email, spécialités et médecins) |
+| **Prendre RDV** | Le vrai formulaire : hôpital, spécialité, recherche de médecin, date et créneaux libres. Seul l'envoi demande un compte |
 | **Profil** | « Visiteur » : connexion, inscription, et accès des professionnels (médecin, secrétaire, administrateur) |
 
-Tous les boutons de réservation (« Prendre rendez-vous », « Réserver », « Réserver dans cet hôpital ») passent par un seul contrôle, `_exigerConnexion` : un visiteur voit la fenêtre « Connexion requise », un utilisateur déjà connecté est envoyé vers son espace.
+Les boutons « Prendre rendez-vous », « Réserver » et « Réserver dans cet hôpital » ouvrent le formulaire, avec l'hôpital déjà choisi le cas échéant. Le visiteur peut tout consulter, jusqu'aux créneaux libres d'un médecin. Seul le bouton **« Envoyer ma demande »** passe par le contrôle `_exigerConnexion` : un visiteur voit la fenêtre « Connexion requise », un utilisateur déjà connecté est envoyé vers son espace.
 
-Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` (`hopitaux`, `specialites`). La liste des médecins vient de `users`, réservée aux comptes connectés : elle n'apparaît qu'une fois connecté, dans le formulaire de rendez-vous.
+Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` : `hopitaux`, `specialites`, `disponibilites`, `creneaux_occupes` et `medecins`. Les médecins viennent de `medecins` (`PatientService.getMedecinsPublics`) et non de `users`, réservée aux comptes connectés. Seuls le nom, le prénom et la spécialité sont repris, et l'identifiant utilisé est `userId`, l'uid du compte du médecin, sous lequel sont rangées ses disponibilités. Un médecin sans `userId` dans `medecins` n'apparaît pas pour les visiteurs.
 
 ## Structure
 
@@ -112,7 +112,7 @@ flutter test
 flutter analyze   # doit afficher « No issues found! »
 ```
 
-Au 6 novembre 2026 : **74 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
+Au 6 novembre 2026 : **76 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
 
 ## Organisation du travail
 

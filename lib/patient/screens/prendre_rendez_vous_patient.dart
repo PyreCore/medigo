@@ -49,12 +49,28 @@ class PrendreRendezVousPatient extends StatefulWidget {
   final void Function({required DateTime date, required String heure, String? motif})?
   onValiderModification;
 
+  // Source des médecins d'un hôpital. Par défaut `users` (compte connecté) ;
+  // le mode visiteur passe PatientService.getMedecinsPublics, lisible sans
+  // compte.
+  final Future<List<Medecin>> Function(String hopitalId)? chargerMedecins;
+
+  // Source des spécialités d'un hôpital. Par défaut Firestore ; le mode
+  // visiteur, qui a déjà tout le catalogue, filtre sa propre liste.
+  final Future<List<Specialite>> Function(String hopitalId)? chargerSpecialites;
+
+  // Hôpital pré-sélectionné à l'ouverture (« Réserver dans cet hôpital »).
+  // Ignoré en reprogrammation.
+  final Hopital? hopitalInitial;
+
   const PrendreRendezVousPatient({
     super.key,
     required this.hopitaux,
     this.rendezVousAModifier,
     this.onValider,
     this.onValiderModification,
+    this.chargerMedecins,
+    this.chargerSpecialites,
+    this.hopitalInitial,
   });
 
   @override
@@ -63,8 +79,10 @@ class PrendreRendezVousPatient extends StatefulWidget {
 }
 
 class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
-  final _dispoService = DisponibiliteService();
-  final _patientService = PatientService();
+  // « late » : les services ne sont créés qu'au premier appel. Un test
+  // widget peut ainsi afficher le formulaire sans initialiser Firebase.
+  late final _dispoService = DisponibiliteService();
+  late final _patientService = PatientService();
 
   // "widget" n'existe pas encore quand les champs d'un State sont
   // initialisés (le framework l'affecte après createState) : on initialise
@@ -121,6 +139,9 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
       // lire les disponibilités et les heures déjà prises. Sans lui, il sort
       // immédiatement et l'écran affiche « pas de disponibilité ce jour-là ».
       _chargerMedecinEdition(rdv);
+    } else if (widget.hopitalInitial != null &&
+        widget.hopitaux.contains(widget.hopitalInitial)) {
+      _chargerCatalogueHopital(widget.hopitalInitial!);
     }
   }
 
@@ -187,8 +208,8 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
 
     try {
       final resultats = await Future.wait([
-        _patientService.getMedecins(hopital.id),
-        _patientService.getSpecialites(hopital.id),
+        (widget.chargerMedecins ?? _patientService.getMedecins)(hopital.id),
+        (widget.chargerSpecialites ?? _patientService.getSpecialites)(hopital.id),
       ]);
       if (!mounted) return;
       setState(() {
@@ -500,6 +521,9 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
         else if (_hopitalChoisi != null) ...[
           DropdownButtonFormField<Specialite>(
             initialValue: _specialiteChoisie,
+            // isExpanded : sans lui, un nom de spécialité long déborde de
+            // l'écran sur un téléphone de 360 px.
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Spécialité (optionnel)',
               prefixIcon: Icon(Icons.medical_services),
@@ -511,7 +535,10 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
                 child: Text('Toutes les spécialités'),
               ),
               ..._specialites.map(
-                (s) => DropdownMenuItem(value: s, child: Text(s.nom)),
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(s.nom, overflow: TextOverflow.ellipsis),
+                ),
               ),
             ],
             // Changer de spécialité change la liste des médecins : on
@@ -540,6 +567,7 @@ class _PrendreRendezVousPatientState extends State<PrendreRendezVousPatient> {
           const SizedBox(height: 12),
           DropdownButtonFormField<Medecin>(
             initialValue: medecinAffiche,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Médecin',
               prefixIcon: Icon(Icons.person),
