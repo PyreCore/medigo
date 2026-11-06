@@ -124,7 +124,7 @@ Projet de groupe : chaque membre a la charge d'un ou plusieurs espaces de l'appl
 | **chris2007-t** | Configuration Firebase, espaces Administrateur système et Administrateur d'hôpital, connexion, site admin dédié | 17 |
 | **joworst-boy** | Espaces Médecin et Secrétaire (fonctions, notifications, responsive, design) | 11 |
 | **Andem** | Première version des espaces Médecin et Secrétaire | 1 |
-| **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 11 |
+| **mvp** / **etoumbi9** / **PyreCore** | Espace Patient (dont le mode visiteur), inscription, règles Firestore, rappels, README, nettoyage de l'analyse | 12 |
 <!-- membres:fin -->
 
 > `mvp`, `etoumbi9` et `PyreCore` désignent le même membre, qui a commité depuis plusieurs configurations Git différentes.
@@ -207,6 +207,7 @@ Le script lit `git log` et réécrit uniquement ce qui se trouve entre les repè
 | 06/11 12:32 | PyreCore | `06581ce` | **Mode visiteur** : l'application s'ouvre sur l'espace Patient sans connexion ; la réservation demande un compte. Remplace l'ancien accueil public. 9 tests ajoutés. |
 | 06/11 12:35 | PyreCore | `0efa8cc` | **README** : historique à jour (site admin dédié, mode visiteur, heures et nombre de commits par membre). |
 | 06/11 12:40 | PyreCore | `fb18eef` | **README : ajouter le commit 0efa8cc a l'historique** |
+| 06/11 12:45 | PyreCore | `2c666dd` | **Script `tool/historique.dart`** : historique et nombre de commits par membre générés depuis `git log`, descriptions existantes conservées. |
 <!-- historique:fin -->
 
 > Le commit qui contient une mise à jour de l'historique n'y figure pas encore lui-même (il ne peut pas connaître son propre identifiant) : il apparaîtra au prochain lancement du script.
