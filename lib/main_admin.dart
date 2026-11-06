@@ -2,23 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
-import 'shared/screens/login_screen.dart';
+import 'shared/screens/login_admin_systeme_screen.dart';
 
 // Point d'entrée du site ADMIN (https://medigo-f2fd5-admin.web.app) :
 // un second site Firebase Hosting, déployé depuis build/admin (voir
 // firebase.json). Contrairement au site public (main.dart), il s'ouvre
-// DIRECTEMENT sur l'écran de connexion : pas d'accueil public ici, ce
-// lien est réservé à l'équipe (admin système, admin hôpital, médecin,
-// secrétaire). L'écran de connexion route chaque rôle vers son espace
-// (voir routage_role.dart), aucune duplication de logique.
+// DIRECTEMENT sur UNE CONNEXION DÉDIÉE À L'ADMIN SYSTÈME : pas d'accueil
+// public ici, ce lien est réservé à l'administrateur système. Tout
+// autre rôle (même patient/médecin) qui saisirait ses identifiants ici
+// est refusé et déconnecté — voir login_admin_systeme_screen.dart.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Même si l'rappel de rendez-vous ne concerne que l'espace patient,
-  // on l'initialise aussi ici : un médecin ou une secrétaire peut
-  // manipuler des rendez-vous depuis son espace.
+  // L'rappel de rendez-vous reste initialisé sans condition ici :
+  // NotificationService.init n'échoue jamais et l'espace admin système
+  // consulte aussi des rendez-vous (tableau de bord).
   await NotificationService.instance.init();
   runApp(const MyAppAdmin());
 }
@@ -31,16 +31,16 @@ class MyAppAdmin extends StatelessWidget {
     return MaterialApp(
       title: 'Medigo Admin',
       theme: ThemeData(
-        // Violette : cohérente avec les espaces administrateurs
+        // Thème VIOLETTE : cohérente avec les espaces administrateurs
         // (voir theme/admin_theme.dart).
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6A1B9A)),
       ),
-      // Le site admin s'ouvre sur la connexion : toute URL inconnue
-      // (rafraîchissement de page, lien partagé) rebasculera dessus.
+      // Le site admin s'ouvre sur la CONNEXION DÉDIÉE admin système :
+      // toute URL inconnue (rafraîchissement, lien partagé) y rebascule.
       initialRoute: '/',
       routes: {
-        '/': (context) => const LoginScreen(),
-        '/login': (context) => const LoginScreen(),
+        '/': (context) => const LoginAdminSystemeScreen(),
+        '/login': (context) => const LoginAdminSystemeScreen(),
       },
     );
   }

@@ -55,6 +55,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // valeur. On ne réimplémente pas cette logique ici.
       final role = await RoutageRole.lireRole(result.user!.uid);
 
+      // Espace dédié : l'administrateur système ne se connecte QUE sur
+      // le lien admin (medigo-f2fd5-admin.web.app, voir main_admin.dart),
+      // pas depuis l'application publique. On déconnecte immédiatement
+      // le compte pour qu'aucune session ne traîne sur le site public.
+      if (role == 'adminSysteme') {
+        await _auth.signOut();
+        if (!mounted) return;
+        setState(() {
+          _erreur = 'Connexion admin système réservée au lien dédié';
+          _isLoading = false;
+        });
+        return;
+      }
+
       if (!mounted) return;
 
       final ecran = RoutageRole.ecranPourRole(role, userData);
