@@ -1,26 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../theme/admin_theme.dart';
 import 'routage_role.dart';
 
 /// Écran de connexion DÉDIÉ à l'administrateur système, servi uniquement
 /// par le site admin (medigo-f2fd5-admin.web.app, point d'entrée
-/// main_admin.dart).
+/// main_admin.dart). Mise en page "console" inspirée des back-offices
+/// modernes : panneau de marque à gauche (violet Medigo) + formulaire à
+/// droite. Sur mobile (< 720 px), seul le formulaire occupe l'écran.
 ///
-/// Différences avec LoginScreen (le site public) :
-/// 1. AUCUNE inscription : les comptes admin système sont créés depuis la
-///    console, pas depuis un formulaire public.
+/// Comportement (identique à la première version) :
+/// 1. AUCUNE inscription : les comptes admin système sont créés depuis
+///    l'espace lui-même (ou la console), jamais depuis un formulaire public.
 /// 2. Toute autre connexion est REFUSÉE : patient, médecin, secrétaire,
-///    admin hôpital qui saisiraient leurs identifiants ici sont
-///    déconnectés (`signOut`) et reçoivent un message clair. Ce lien est
-///    la porte d'entrée exclusivement dédiée à l'administrateur système.
-/// 3. Si la session de ce navigateur contient déjà un compte non-admin
-///    système (ouvert ailleurs), elle n'est pas réutilisée : seuls des
-///    identifiants valides d'admin système ouvrent l'espace.
-///
-/// Même mécanismes que le site public : déconnexion au "retour" via
-/// EspaceAvecRetourDeconnexion, écran bloqué sous 900 px via la garde
-/// de ecranPourRole, lecture robuste du rôle via RoutageRole.lireRole.
+///    admin hôpital sont déconnectés (`signOut`) avec un message clair.
+/// 3. Les mécanismes du site public sont conservés : déconnexion au
+///    "retour" via EspaceAvecRetourDeconnexion, garde "ordinateur seul"
+///    (< 900 px) de ecranPourRole, lecture robuste du rôle.
 class LoginAdminSystemeScreen extends StatefulWidget {
   const LoginAdminSystemeScreen({super.key});
 
@@ -55,8 +52,8 @@ class _LoginAdminSystemeScreenState extends State<LoginAdminSystemeScreen> {
       final role = await RoutageRole.lireRole(result.user!.uid);
 
       // Lien réservé à l'administrateur système : tout autre rôle est
-      // déconnecté immédiatement. On ne affiche jamais quel rôle le
-      // compte possède (pas d'information au visiteur).
+      // déconnecté immédiatement. On ne révèle jamais quel rôle possède
+      // le compte (aucune information au visiteur).
       if (role != 'adminSysteme') {
         await _auth.signOut();
         if (!mounted) return;
@@ -102,102 +99,283 @@ class _LoginAdminSystemeScreenState extends State<LoginAdminSystemeScreen> {
     }
   }
 
+  // ── Habillage "console deux panneaux" ───────────────────────────────
+
+  static const _fondCreme = Color(0xFFFAF6F1);
+  static const _champ = Color(0xFFF2EDE5);
+
+  InputDecoration _decoChamp({
+    required String libelle,
+    required IconData icone,
+    Widget? suffixe,
+  }) {
+    return InputDecoration(
+      labelText: libelle,
+      filled: true,
+      fillColor: _champ,
+      prefixIcon: Icon(icone, color: AdminCouleurs.violet),
+      suffixIcon: suffixe,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(26),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(26),
+        borderSide: const BorderSide(color: AdminCouleurs.violet, width: 1.8),
+      ),
+    );
+  }
+
+  Widget _panneauMarque() {
+    return Container(
+      color: const Color(0xFF2A1A3E),
+      padding: const EdgeInsets.fromLTRB(40, 40, 40, 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Pastille de marque : cercle violet clair avec icône admin.
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              gradient: AdminCouleurs.degrade,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.admin_panel_settings_outlined,
+              color: Colors.white,
+              size: 34,
+            ),
+          ),
+          const Spacer(),
+          const Text(
+            'Medigo',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 44,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Espace Administrateur système',
+            style: TextStyle(
+              color: Colors.purple.shade200,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 28),
+          // Points forts de la console, comme Les back-offices modernes.
+          _entreeSection(Icons.local_hospital_outlined, 'Hôpitaux & provinces'),
+          const SizedBox(height: 14),
+          _entreeSection(Icons.manage_accounts_outlined, 'Comptes admin hôpital'),
+          const SizedBox(height: 14),
+          _entreeSection(Icons.insights_outlined, 'Statistiques du système'),
+        ],
+      ),
+    );
+  }
+
+  Widget _entreeSection(IconData icone, String texte) {
+    return Row(
+      children: [
+        Icon(icone, color: Colors.purple.shade200, size: 20),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            texte,
+            style: TextStyle(color: Colors.purple.shade100, fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _formulaire(double largeurUtile) {
+    return Container(
+      color: _fondCreme,
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Connexion',
+              style: TextStyle(
+                color: Colors.grey.shade900,
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Accès réservé à l\'administrateur système.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 28),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: _decoChamp(libelle: 'E-mail', icone: Icons.email_outlined),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: _decoChamp(
+                libelle: 'Mot de passe',
+                icone: Icons.lock_outline,
+                suffixe: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    color: Colors.grey.shade500,
+                  ),
+                  onPressed: () => setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  }),
+                ),
+              ),
+            ),
+            if (_erreur != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                _erreur!,
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _connecter,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminCouleurs.violet,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(26),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.4,
+                        ),
+                      )
+                    : const Text(
+                        'Se connecter',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.shield_outlined,
+                    size: 16, color: Colors.grey.shade500),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lien réservé à l\'administrateur système : '
+                    'tout autre compte est refusé ici.',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12.5,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _fondCreme,
       appBar: AppBar(
         title: const Text('Medigo — Espace Système'),
-        backgroundColor: const Color(0xFF6A1B9A),
+        backgroundColor: const Color(0xFF2A1A3E),
         foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Center(
-          child: ConstrainedBox(
-            // Sur un grand écran, le formulaire ne s'étire pas sur toute
-            // la largeur.
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const Icon(Icons.admin_panel_settings_outlined,
-                      size: 80, color: Color(0xFF6A1B9A)),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Administration du système',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Mot de passe',
-                      prefixIcon: const Icon(Icons.lock),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () => setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        }),
+      body: LayoutBuilder(
+        builder: (context, contraintes) {
+          if (contraintes.maxWidth >= 720) {
+            // Ordinateur : deux panneaux, comme les consoles admin.
+            return Row(
+              children: [
+                Expanded(flex: 5, child: _panneauMarque()),
+                Expanded(flex: 7, child: _formulaire(contraintes.maxWidth * 7 / 12)),
+              ],
+            );
+          }
+          // Téléphone : le formulaire seul, avec une en-tête compacte.
+          return ListView(
+            children: [
+              Container(
+                color: const Color(0xFF2A1A3E),
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        gradient: AdminCouleurs.degrade,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                        color: Colors.white,
+                        size: 26,
                       ),
                     ),
-                  ),
-                  if (_erreur != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        _erreur!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Medigo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _connecter,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6A1B9A),
-                        foregroundColor: Colors.white,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Espace Administrateur système',
+                      style: TextStyle(
+                        color: Colors.purple.shade200,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
                       ),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                              'Accéder à l\'espace système',
-                              style: TextStyle(fontSize: 17),
-                            ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Lien réservé à l\'administrateur système de Medigo.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
-        ),
+              _formulaire(contraintes.maxWidth),
+            ],
+          );
+        },
       ),
     );
   }
