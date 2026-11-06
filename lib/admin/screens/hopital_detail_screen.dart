@@ -155,7 +155,7 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                 'description': descriptionController.text,
                 'hopitalId': widget.hopitalId,
               });
-              if (mounted) Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Ajouter'),
           ),
@@ -222,7 +222,7 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                     if (!snapshot.hasData) return const CircularProgressIndicator();
                     var specs = snapshot.data!.docs;
                     return DropdownButtonFormField<String>(
-                      value: selectedSpecId,
+                      initialValue: selectedSpecId,
                       hint: const Text('Specialite'),
                       items: specs.map((doc) {
                         var data = doc.data() as Map<String, dynamic>;
@@ -272,7 +272,7 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                     'userId': result.user!.uid,
                   });
 
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                   } on FirebaseAuthException catch (e) {
                     // Message ROUGE dans la fenêtre, toujours visible,
                     // au lieu d'une notification en bas de l'écran.

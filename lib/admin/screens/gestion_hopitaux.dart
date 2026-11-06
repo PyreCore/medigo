@@ -42,10 +42,8 @@ class _GestionHopitauxState extends State<GestionHopitaux> {
                 telephone: telephoneController.text, email: emailController.text,
               );
               await _firestoreService.ajouterHopital(hopital);
-              if (mounted) {
-                Navigator.pop(context);
-                setState(() {});
-              }
+              if (context.mounted) Navigator.pop(context);
+              if (mounted) setState(() {});
             },
             child: const Text('Ajouter'),
           ),
@@ -116,10 +114,8 @@ class _GestionHopitauxState extends State<GestionHopitaux> {
                                 ElevatedButton(
                                   onPressed: () async {
                                     await _firestoreService.supprimerHopital(hopital.id);
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                      setState(() {});
-                                    }
+                                    if (context.mounted) Navigator.pop(context);
+                                    if (mounted) setState(() {});
                                   },
                                   child: const Text('Oui'),
                                 ),

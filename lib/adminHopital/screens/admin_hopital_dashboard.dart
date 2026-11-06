@@ -789,7 +789,7 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                 'hopitalId': widget.hopitalId,
               });
               _rafraichirStats();
-              if (mounted) Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Ajouter'),
           ),
@@ -895,7 +895,7 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                   });
 
                   _rafraichirStats();
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 } on FirebaseAuthException catch (e) {
                   // Message ROUGE dans la fenêtre, toujours visible,
                   // au lieu d'une notification en bas de l'écran.
@@ -991,7 +991,7 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                     }
                     final specs = snapshot.data!.docs;
                     return DropdownButtonFormField<String>(
-                      value: selectedSpecId,
+                      initialValue: selectedSpecId,
                       hint: const Text('Spécialité'),
                       items: specs.map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
@@ -1050,7 +1050,7 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                   });
 
                   _rafraichirStats();
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 } on FirebaseAuthException catch (e) {
                   // AVANT : l'erreur était avalée (debugPrint invisible),
                   // l'admin pensait que le bouton ne faisait rien. Message

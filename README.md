@@ -94,10 +94,10 @@ Les rappels utilisent une alarme **imprécise** : aucune permission `SCHEDULE_EX
 
 ```bash
 flutter test
-flutter analyze   # ne doit remonter que des info
+flutter analyze   # doit afficher « No issues found! »
 ```
 
-Au 6 novembre 2026 : **65 tests passent**, `flutter analyze` ne remonte **aucune erreur ni avertissement** (17 remarques de niveau info, voir [Remarques d'analyse restantes](#remarques-danalyse-restantes)).
+Au 6 novembre 2026 : **65 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
 
 ## Organisation du travail
 
@@ -173,15 +173,26 @@ Les heures sont celles des auteurs. Les commits de fusion (*merge*) sont signal�
 | 05/11 11:52 | chris2007-t | `aff9dda` | **Ajout d'hôpital et inscription patient** : erreurs affichées en rouge dans le formulaire. |
 | 05/11 12:04 | chris2007-t | `408ccf8` | **Ajout d'hôpital** : vérifie si l'email est déjà utilisé ; corrige un `setState` qui recevait une `Future` dans `_rafraichirStats`. |
 
-### Remarques d'analyse restantes
+### Nettoyage de l'analyse (6 novembre 2026)
 
-Le 6 novembre 2026, les remarques `flutter analyze` de la partie Patient ont été corrigées (`withOpacity` → `withValues` dans `lib/patient/screens/`, syntaxe `'clé': ?valeur` dans `patient_service.dart`). Les 17 remarques restantes concernent les parties des autres membres et leur sont laissées :
+`flutter analyze` signalait **27 remarques**. Toutes ont été corrigées : il n'en reste **aucune**, et les 65 tests passent toujours.
 
-| Remarque | Fichiers | Responsable | Correction proposée |
-| --- | --- | --- | --- |
-| `use_build_context_synchronously` (11) | `admin_dashboard.dart`, `gestion_hopitaux.dart`, `gestion_specialites.dart`, `hopital_detail_screen.dart`, `admin_hopital_dashboard.dart` | chris2007-t | Dans les boîtes de dialogue, remplacer `if (mounted)` par `if (context.mounted)` avant `Navigator.pop(context)` : `mounted` teste l'écran parent, pas la boîte de dialogue. |
-| `value` obsolète sur `DropdownButtonFormField` (4) | `admin_dashboard.dart`, `hopital_detail_screen.dart`, `admin_hopital_dashboard.dart` | chris2007-t | Remplacer `value:` par `initialValue:`, en vérifiant les listes qui dépendent d'un autre choix. |
-| `withOpacity` obsolète (2) | `lib/widgets/patient_card.dart` (utilisé par l'espace secrétaire) | joworst-boy | Remplacer par `.withValues(alpha: …)`. |
+**Pourquoi ces corrections étaient nécessaires :**
+
+- **Risque de plantage dans les espaces d'administration (11 cas).** Les fenêtres de création de comptes (hôpital, admin d'hôpital, médecin, secrétaire) et de suppression d'hôpital vérifiaient le mauvais écran après l'enregistrement dans Firestore. Si la fenêtre était fermée pendant l'enregistrement (double clic, bouton retour, réseau lent), l'application pouvait **fermer le mauvais écran ou planter** au moment même où un administrateur crée un compte.
+- **Risque que le projet entier ne compile plus (11 cas).** `value` sur les listes déroulantes et `withOpacity` sont obsolètes et annoncés comme supprimés dans une future version de Flutter. Sans correction, **une simple mise à jour de Flutter aurait empêché toute l'application de se construire**, pour tous les espaces.
+- **Lisibilité (5 cas).** Code simplifié dans `patient_service.dart`, sans changement de comportement.
+
+Aucune de ces remarques ne constituait une faille de sécurité : la protection des données repose sur `firestore.rules`, qui n'a pas été modifié.
+
+| Remarque | Nb | Fichiers (partie) | Correction | Intérêt |
+| --- | --- | --- | --- | --- |
+| `use_build_context_synchronously` | 11 | `admin_dashboard.dart`, `gestion_hopitaux.dart`, `gestion_specialites.dart`, `hopital_detail_screen.dart`, `admin_hopital_dashboard.dart` (admin) | Après un `await` dans une boîte de dialogue : `if (context.mounted) Navigator.pop(context)` au lieu de `if (mounted)`. Le `setState` de l'écran reste protégé par `mounted`. | **Évite un vrai bug.** `mounted` vérifiait l'écran parent, pas la boîte de dialogue. Si celle-ci est fermée pendant l'enregistrement Firestore (double clic, bouton retour), `Navigator.pop` pouvait fermer le mauvais écran ou planter. |
+| `value` obsolète sur `DropdownButtonFormField` | 4 | `admin_dashboard.dart`, `hopital_detail_screen.dart`, `admin_hopital_dashboard.dart` (admin) | `value:` → `initialValue:` | **Compatibilité future.** `value` est obsolète depuis Flutter 3.33 et sera supprimé : le projet ne compilerait plus après une mise à jour de Flutter. Le comportement est identique, car ces listes ne changent que par `onChanged`. |
+| `withOpacity` obsolète | 7 | `lib/patient/screens/` (patient), `widgets/patient_card.dart` (secrétaire) | `couleur.withOpacity(x)` → `couleur.withValues(alpha: x)` | **Compatibilité future et précision.** La nouvelle API conserve la transparence sans arrondi. Le rendu est le même à l'écran. |
+| `use_null_aware_elements` | 5 | `services/patient_service.dart` (patient) | `if (x != null) 'clé': x` → `'clé': ?x` | **Lisibilité.** Syntaxe Dart 3.8 plus courte, même résultat : le champ n'est envoyé à Firestore que s'il a une valeur. |
+
+Garder `flutter analyze` à zéro remarque permet de repérer immédiatement tout nouveau problème introduit par un commit.
 
 ## Notes
 

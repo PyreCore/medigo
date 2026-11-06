@@ -47,10 +47,8 @@ class _GestionSpecialitesState extends State<GestionSpecialites> {
                 'description': descriptionController.text,
                 'hopitalId': widget.hopitalId,
               });
-              if (mounted) {
-                Navigator.pop(context);
-                setState(() {});
-              }
+              if (context.mounted) Navigator.pop(context);
+              if (mounted) setState(() {});
             },
             child: const Text('Ajouter'),
           ),

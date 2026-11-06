@@ -598,7 +598,7 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedProvince,
+                  initialValue: selectedProvince,
                   hint: const Text('Province (obligatoire)'),
                   items: provincesGabon
                       .map((p) => DropdownMenuItem(value: p, child: Text(p)))
@@ -656,7 +656,7 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                     'province': selectedProvince,
                   });
                   _rafraichirStats();
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 } catch (e) {
                   // AVANT : aucune gestion d'erreur — l'écriture refusée
                   // laissait la fenêtre muette. Message rouge dans la
@@ -739,7 +739,7 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                     }
                     final hopitaux = snapshot.data!.docs;
                     return DropdownButtonFormField<String>(
-                      value: selectedHopitalId,
+                      initialValue: selectedHopitalId,
                       hint: const Text('Choisir un hôpital'),
                       items: hopitaux.map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
@@ -785,7 +785,7 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
                     'hopitalId': selectedHopitalId,
                   });
                   _rafraichirStats();
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                   } on FirebaseAuthException catch (e) {
                     // Message ROUGE dans la fenêtre, toujours visible,
                     // au lieu d'une notification en bas de l'écran.
@@ -821,7 +821,7 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
             onPressed: () async {
               await _db.collection('hopitaux').doc(id).delete();
               _rafraichirStats();
-              if (mounted) Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: MaquetteCouleurs.refuseTexte,
