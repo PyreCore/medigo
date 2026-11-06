@@ -22,9 +22,9 @@ import 'prendre_rendez_vous_patient.dart';
 /// seul point de contrôle de l'accès.
 ///
 /// Les lectures se limitent aux collections ouvertes en lecture anonyme par
-/// firestore.rules : `hopitaux`, `specialites`, `medecins` (au lieu de
-/// `users`, réservée aux comptes connectés), `disponibilites` et
-/// `creneaux_occupes`.
+/// firestore.rules : `hopitaux`, `specialites`, `medecins_publics` (nom,
+/// prénom et spécialité des médecins, sans leurs coordonnées),
+/// `disponibilites` et `creneaux_occupes`.
 class EspacePatientVisiteur extends StatefulWidget {
   // Sources de données injectables, pour les tests : par défaut, Firestore
   // et FirebaseAuth. Un test widget n'initialise pas Firebase.
@@ -153,7 +153,7 @@ class _EspacePatientVisiteurState extends State<EspacePatientVisiteur> {
   }
 
   Future<List<Medecin>> _medecinsDe(String hopitalId) =>
-      (widget.chargerMedecins ?? _patientService.getMedecinsPublics)(hopitalId);
+      (widget.chargerMedecins ?? _patientService.getMedecins)(hopitalId);
 
   /// Ouvre l'onglet Prendre RDV, avec un hôpital déjà choisi ou non.
   void _ouvrirReservation([Hopital? hopital]) {

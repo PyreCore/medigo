@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/medecin_public_service.dart';
 import '../../theme/admin_theme.dart';
 import '../../theme/maquette_tokens.dart';
 import '../../widgets/champ_mot_de_passe.dart';
@@ -66,6 +67,10 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
         .collection('medecins')
         .where('hopitalId', isEqualTo: widget.hopitalId)
         .get();
+    // Rattrapage : republie les fiches publiques des médecins de l'hôpital
+    // (ceux créés avant medecins_publics). Sans attendre, et sans jamais
+    // faire échouer le tableau de bord.
+    MedecinPublicService().synchroniser(medecins.docs.map((d) => d.data()));
     final users = await _db
         .collection('users')
         .where('hopitalId', isEqualTo: widget.hopitalId)
@@ -491,6 +496,9 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                         ),
                         onPressed: () async {
                           await _db.collection('medecins').doc(doc.id).delete();
+                          // Le médecin ne doit plus être proposé aux patients.
+                          await MedecinPublicService()
+                              .retirer(data['userId']?.toString());
                           _rafraichirStats();
                         },
                       ),
@@ -1039,7 +1047,7 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                     'specialiteId': selectedSpecId ?? '',
                   });
 
-                  await _db.collection('medecins').add({
+                  final ficheMedecin = {
                     'prenom': prenomController.text,
                     'nom': nomController.text,
                     'email': emailController.text.trim(),
@@ -1047,7 +1055,12 @@ class _AdminHopitalDashboardState extends State<AdminHopitalDashboard> {
                     'specialiteId': selectedSpecId ?? '',
                     'hopitalId': widget.hopitalId,
                     'userId': result.user!.uid,
-                  });
+                  };
+                  await _db.collection('medecins').add(ficheMedecin);
+                  // Fiche PUBLIQUE (nom, prénom, spécialité, hôpital) : c'est
+                  // elle que voient visiteurs et patients, sans email ni
+                  // téléphone. Voir MedecinPublicService.
+                  await MedecinPublicService().publier(ficheMedecin);
 
                   _rafraichirStats();
                   if (context.mounted) Navigator.pop(context);

@@ -7,22 +7,14 @@ service cloud.firestore {
       // Lecture : son propre profil, ou tous les profils pour les roles de
       // gestion.
       //
-      // Troisieme cas, ajoute pour les PATIENTS : ils doivent pouvoir
-      // lister les medecins d'un hopital pour reserver, et les medecins
-      // vivent dans "users". On ne leur ouvre donc QUE les documents de
-      // role "medecin" : ouvrir toute la collection leur donnerait aussi
-      // les coordonnees des secretaires et des autres comptes.
-      //
-      // La condition porte sur "resource.data.role" : elle n'est acceptable
-      // que si la requête filtre elle-meme sur "role". C'est pourquoi
-      // PatientService.getMedecins utilise deux filtres d'egalite
-      // (role + hopitalId). Firestock refuse sinon la requete entiere.
+      // Les PATIENTS n'y lisent plus les medecins : un document "users"
+      // contient l'email et le telephone personnels, et n'importe qui peut
+      // se creer un compte patient. Ils lisent "medecins_publics" a la
+      // place (voir plus bas).
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-          in ['adminSysteme', 'adminHopital', 'secretaire'] ||
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'patient' &&
-         resource.data.role == 'medecin')
+          in ['adminSysteme', 'adminHopital', 'secretaire']
       );
 
       // Creation d'un profil.
@@ -99,9 +91,16 @@ service cloud.firestore {
       );
     }
 
-    // MEDECINS
+    // MEDECINS : fiche COMPLETE (email, telephone), reservee au personnel.
+    //
+    // Avant : "allow read: if true" -> n'importe qui, sans compte, pouvait
+    // lire l'email et le telephone de tous les medecins en interrogeant la
+    // base directement. Une regle ne pouvant pas masquer un champ, la partie
+    // publique est copiee dans "medecins_publics".
     match /medecins/{medecinId} {
-      allow read: if true;
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['adminSysteme', 'adminHopital', 'secretaire', 'medecin'];
       allow create: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
           in ['adminSysteme', 'adminHopital'];
@@ -244,6 +243,30 @@ service cloud.firestore {
         resource.data.medecinId == request.auth.uid ||
         get(/databases/$(database)/documents/rendez_vous/$(resource.data.rdvId)).data.patientUid
           == request.auth.uid
+      );
+    }
+
+    // MEDECINS_PUBLICS : nom, prenom, specialite et hopital d'un medecin,
+    // lisibles sans compte (mode visiteur, prise de rendez-vous).
+    //
+    // L'id du document est l'uid du compte du medecin. "hasOnly" refuse tout
+    // document portant un autre champ : un email ou un telephone ne peut
+    // pas y etre ecrit, meme par erreur. Ecrite par les administrateurs
+    // (MedecinPublicService), un adminHopital seulement pour son hopital.
+    match /medecins_publics/{medecinUid} {
+      allow read: if true;
+      allow create, update: if request.auth != null &&
+        request.resource.data.keys().hasOnly(['nom', 'prenom', 'specialiteId', 'hopitalId']) && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminHopital' &&
+           request.resource.data.hopitalId ==
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId)
+        );
+      allow delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminSysteme' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'adminHopital' &&
+         resource.data.hopitalId ==
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hopitalId)
       );
     }
 

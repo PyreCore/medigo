@@ -50,9 +50,8 @@ class PrendreRendezVousPatient extends StatefulWidget {
   final void Function({required DateTime date, required String heure, String? motif})?
   onValiderModification;
 
-  // Source des médecins d'un hôpital. Par défaut `users` (compte connecté) ;
-  // le mode visiteur passe PatientService.getMedecinsPublics, lisible sans
-  // compte.
+  // Source des médecins d'un hôpital. Par défaut PatientService.getMedecins
+  // (collection `medecins_publics`) ; remplaçable pour les tests.
   final Future<List<Medecin>> Function(String hopitalId)? chargerMedecins;
 
   // Source des spécialités d'un hôpital. Par défaut Firestore ; le mode

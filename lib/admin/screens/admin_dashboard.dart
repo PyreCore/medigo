@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'hopital_detail_screen.dart';
 import '../../shared/constants/provinces.dart';
+import '../../services/medecin_public_service.dart';
 import '../../theme/admin_theme.dart';
 import '../../theme/maquette_tokens.dart';
 import '../../widgets/champ_mot_de_passe.dart';
@@ -49,6 +50,10 @@ class _AdminSystemeDashboardState extends State<AdminSystemeDashboard> {
     final hopitaux = await _db.collection('hopitaux').get();
     final users = await _db.collection('users').get();
     final medecins = await _db.collection('medecins').get();
+    // Rattrapage : republie les fiches publiques de tous les médecins (ceux
+    // créés avant medecins_publics). Sans attendre, et sans jamais faire
+    // échouer le tableau de bord.
+    MedecinPublicService().synchroniser(medecins.docs.map((d) => d.data()));
 
     var adminsHopitaux = 0;
     for (final doc in users.docs) {

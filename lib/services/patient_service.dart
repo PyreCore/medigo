@@ -6,6 +6,7 @@ import '../models/specialite.dart';
 import '../models/rendez_vous.dart';
 import '../shared/models/hopital_model.dart';
 import 'creneau_service.dart';
+import 'medecin_public_service.dart';
 
 /// Service qui regroupe tout l'accès à Firestore pour la partie PATIENT.
 /// Même principe que MedecinService et SecretaireService : les écrans ne
@@ -191,69 +192,15 @@ class PatientService {
     return liste;
   }
 
-  /// Liste des médecins d'un hôpital.
+  /// Médecins d'un hôpital, pour le formulaire « Prendre rendez-vous »,
+  /// en mode visiteur comme pour un patient connecté.
   ///
-  /// Les deux filtres d'égalité (role + hopitalId) sont VOLONTAIRES, alors
-  /// qu'un seul suffirait à l'écran. Ce n'est pas une question de confort :
-  /// c'est ce qui rend la requête acceptable par les règles de sécurité.
-  ///
-  /// En effet, la règle n'autorise un patient que sur les documents dont
-  /// "resource.data.role == 'medecin'". Firestore ne raisonne que sur ce que
-  /// la requête constraint : sans filtre sur "role", il ne peut pas prouver
-  /// que TOUS les documents renvoyés sont des médecins, et il refuse la
-  /// requête entière. Avec le filtre, il y arrive.
-  ///
-  /// Contrepartie : deux égalités exigent un index composite
-  /// users(role, hopitalId). Il est déclaré dans firestore.indexes.json.
-  /// Le même index sert à SecretaireService.getMedecinsHopital.
-  Future<List<Medecin>> getMedecins(String hopitalId) async {
-    final snapshot = await _db
-        .collection('users')
-        .where('role', isEqualTo: 'medecin')
-        .where('hopitalId', isEqualTo: hopitalId)
-        .get();
-
-    return snapshot.docs
-        .map((doc) => Medecin.fromJson({'id': doc.id, ...doc.data()}))
-        .toList();
-  }
-
-  /// Médecins d'un hôpital, lisibles SANS compte (mode visiteur).
-  ///
-  /// `users` n'est lisible que par un compte connecté : le visiteur lit
-  /// donc la collection `medecins`, ouverte en lecture par firestore.rules,
-  /// que l'administrateur remplit en même temps que le compte du médecin.
-  ///
-  /// L'id retenu est `userId`, l'uid du COMPTE du médecin, et non l'id du
-  /// document `medecins` : c'est sous cet uid que sont rangées ses
-  /// disponibilités et ses créneaux occupés. Un document sans `userId`
-  /// (créé avant ce champ) est écarté, ses créneaux seraient introuvables.
-  ///
-  /// Seuls le nom, le prénom et la spécialité sont repris : l'email et le
-  /// téléphone du médecin n'ont rien à faire dans l'écran d'un visiteur.
-  /// Un seul filtre d'égalité : aucun index composite n'est nécessaire.
-  Future<List<Medecin>> getMedecinsPublics(String hopitalId) async {
-    final snapshot = await _db
-        .collection('medecins')
-        .where('hopitalId', isEqualTo: hopitalId)
-        .get();
-
-    final liste = <Medecin>[];
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      final uid = data['userId']?.toString() ?? '';
-      if (uid.isEmpty) continue;
-      liste.add(Medecin.fromJson({
-        'id': uid,
-        'nom': data['nom'],
-        'prenom': data['prenom'],
-        'specialiteId': data['specialiteId'],
-        'hopitalId': hopitalId,
-      }));
-    }
-    liste.sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
-    return liste;
-  }
+  /// Ils sont lus dans `medecins_publics` (voir MedecinPublicService), qui ne
+  /// contient que le nom, le prénom, la spécialité et l'hôpital. Ni `users`
+  /// ni `medecins` ne sont lisibles par un patient ou un visiteur : ces deux
+  /// collections portent l'email et le téléphone personnels du médecin.
+  Future<List<Medecin>> getMedecins(String hopitalId) =>
+      MedecinPublicService(db: _db).getMedecins(hopitalId);
 
   /// Les heures déjà réservées chez un médecin pour une date donnée.
   ///

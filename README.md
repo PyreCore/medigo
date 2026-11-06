@@ -51,7 +51,7 @@ Au lancement, l'application s'ouvre directement sur **l'espace Patient en mode v
 
 Les boutons « Prendre rendez-vous », « Réserver » et « Réserver dans cet hôpital » ouvrent le formulaire, avec l'hôpital déjà choisi le cas échéant. Le visiteur peut tout consulter, jusqu'aux créneaux libres d'un médecin. Seul le bouton **« Envoyer ma demande »** passe par le contrôle `_exigerConnexion` : un visiteur voit la fenêtre « Connexion requise », un utilisateur déjà connecté est envoyé vers son espace.
 
-Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` : `hopitaux`, `specialites`, `disponibilites`, `creneaux_occupes` et `medecins`. Les médecins viennent de `medecins` (`PatientService.getMedecinsPublics`) et non de `users`, réservée aux comptes connectés. Seuls le nom, le prénom et la spécialité sont repris, et l'identifiant utilisé est `userId`, l'uid du compte du médecin, sous lequel sont rangées ses disponibilités. Un médecin sans `userId` dans `medecins` n'apparaît pas pour les visiteurs.
+Le visiteur ne lit que les collections ouvertes en lecture anonyme par `firestore.rules` : `hopitaux`, `specialites`, `disponibilites`, `creneaux_occupes` et `medecins_publics`. Les médecins viennent de `medecins_publics`, qui ne contient que leur nom, leur prénom, leur spécialité et leur hôpital (voir [Sécurité : coordonnées des médecins](#sécurité--coordonnées-des-médecins-6-novembre-2026)).
 
 **Reprise de la réservation après connexion.** Quand le visiteur appuie sur « Envoyer ma demande », sa réservation (hôpital, médecin, date, créneau, motif) est gardée en mémoire par `ReservationEnAttente` (`lib/patient/reservation_en_attente.dart`). Après la connexion ou l'inscription, `PatientHomeLoader` la reprend : l'espace s'ouvre sur l'onglet « Prendre RDV », formulaire pré-rempli, et le patient n'a plus qu'à envoyer. L'écran de connexion n'est pas modifié.
 
@@ -97,13 +97,63 @@ flutter run
 
 ## Firestore
 
-Collections utilisées : `users`, `hopitaux`, `specialites`, `medecins`, `patients`, `disponibilites`, `rendez_vous`, `creneaux_occupes`.
+Collections utilisées : `users`, `hopitaux`, `specialites`, `medecins`, `medecins_publics`, `patients`, `disponibilites`, `rendez_vous`, `creneaux_occupes`.
 
-- **`firestore.rules`** — un patient ne lit que les documents `role == 'medecin'` de `users`, et n'accède qu'au dossier `patients` dont le champ `userId` vaut son `uid`. Les rendez-vous sont rattachés au compte via `patientUid` : vérifier l'appartenance par un `get()` sur `patients` ne fonctionne pas depuis une requête, Firestore refusant alors la requête entière.
+- **`firestore.rules`** — un patient n'accède qu'au dossier `patients` dont le champ `userId` vaut son `uid`. Il ne lit les médecins que dans `medecins_publics`, ni dans `users` ni dans `medecins`, qui contiennent leurs coordonnées. Les rendez-vous sont rattachés au compte via `patientUid` : vérifier l'appartenance par un `get()` sur `patients` ne fonctionne pas depuis une requête, Firestore refusant alors la requête entière.
 - **`firestore.indexes.json`** — index composites sur `users(role, hopitalId)`, `rendez_vous(hopitalId|medecinId, statut)` et `creneaux_occupes(medecinId, date)`.
 - **`creneaux_occupes`** — collection dédiée aux heures réservées, sans donnée personnelle. Elle remplace la lecture de tous les rendez-vous d'un médecin pour calculer les heures prises, ce qui exposait le patient au nom et au motif de consultation des autres.
 
 > Les règles et les index **ne sont pas versionnés à leur déploiement** : sans `firebase deploy`, les requêtes de l'espace Patient échouent en `permission-denied` ou `failed-precondition`.
+
+## Sécurité : coordonnées des médecins (6 novembre 2026)
+
+### Le problème
+
+L'email et le téléphone **personnels** de tous les médecins pouvaient être lus par n'importe qui :
+
+| Collection | Ancienne règle de lecture | Qui pouvait lire email et téléphone |
+| --- | --- | --- |
+| `medecins` | `allow read: if true` | **n'importe qui, sans compte**, en interrogeant la base directement |
+| `users` (documents `role: medecin`) | lecture autorisée à tout compte `patient` | **n'importe qui** : chacun peut se créer un compte patient en une minute |
+
+L'application n'affichait pas ces coordonnées, mais **la base ne se protège pas par l'interface** : un appel direct à l'API Firestore, avec la configuration publique de l'application (`firebase_options.dart`), suffisait à les récupérer.
+
+### Pourquoi une nouvelle collection
+
+Une règle Firestore autorise ou refuse la lecture d'un **document entier** : elle ne peut pas cacher un champ. Tant que l'email et le téléphone sont dans le même document que le nom, rendre le nom public rend aussi l'email public. La seule correction possible est de **séparer** la partie publique dans sa propre collection.
+
+### La correction
+
+| Collection | Nouvelle règle de lecture | Contenu |
+| --- | --- | --- |
+| `medecins_publics/{uid}` (nouvelle) | tout le monde | **uniquement** `nom`, `prenom`, `specialiteId`, `hopitalId`. La règle refuse (`hasOnly`) tout document qui porterait un autre champ : un email ne peut pas y être écrit, même par erreur. |
+| `medecins` | personnel seulement : `adminSysteme`, `adminHopital`, `secretaire`, `medecin` | fiche complète, inchangée |
+| `users` | les patients ne lisent plus les fiches des médecins | inchangé |
+
+Visiteurs et patients connectés lisent désormais les médecins dans `medecins_publics` (`PatientService.getMedecins`, qui délègue à `MedecinPublicService`). L'id de chaque document est l'uid du compte du médecin, sous lequel sont rangées ses disponibilités et ses créneaux occupés.
+
+### Fichiers modifiés hors de la partie Patient
+
+`medecins_publics` doit être remplie là où les médecins sont créés et supprimés, c'est-à-dire dans les espaces d'administration. Les modifications s'y limitent à ces moments-là, sans changer ce que voient les administrateurs :
+
+| Fichier | Responsable | Modification | Justification |
+| --- | --- | --- | --- |
+| `lib/adminHopital/screens/admin_hopital_dashboard.dart` | chris2007-t | À la création d'un médecin : `MedecinPublicService().publier(...)`. À sa suppression : `retirer(...)`. Au chargement des statistiques : `synchroniser(...)`. | Sans cela, un médecin créé par l'admin d'hôpital serait invisible pour les patients, et un médecin supprimé leur resterait proposé. |
+| `lib/admin/screens/hopital_detail_screen.dart` | chris2007-t | Mêmes ajouts à la création et à la suppression. | Même raison, pour les médecins créés par l'admin système. |
+| `lib/admin/screens/admin_dashboard.dart` | chris2007-t | Au chargement des statistiques : `synchroniser(...)`. | Rattrape **tous** les médecins créés avant cette correction, sans script de migration. |
+
+Ces trois appels **ne lèvent jamais d'exception** : si la publication échoue (règles pas encore déployées, réseau), l'écran admin fonctionne comme avant, et la synchronisation suivante rattrape. Les écrans admin continuent de lire `medecins` et d'afficher l'email des médecins, ce qui reste autorisé pour le personnel. Aucun écran des espaces médecin ou secrétaire n'est modifié : ils lisent `users`, dont les droits ne changent pas pour eux.
+
+### Déploiement : à faire dans cet ordre
+
+1. **Déployer les règles** : `firebase deploy --only firestore:rules`. Elles ont été vérifiées à blanc (`--dry-run`), elles compilent sans erreur.
+2. **Un administrateur système ouvre son tableau de bord** : la synchronisation remplit `medecins_publics` pour tous les médecins existants.
+
+Entre les deux étapes, visiteurs et patients ne voient **aucun médecin**, car `medecins_publics` est encore vide. Il faut donc enchaîner rapidement. Un médecin absent de `medecins`, ou sans `userId`, n'est pas publié.
+
+### Tests
+
+`test/medecin_public_service_test.dart` vérifie que la fiche publique ne contient ni email, ni téléphone, ni uid, et que sa liste de champs est **exactement** celle de la règle `hasOnly` de `firestore.rules` : le test lit le fichier de règles, donc toute divergence entre les deux le fait échouer.
 
 ## Rappels de rendez-vous
 
@@ -118,7 +168,7 @@ flutter test
 flutter analyze   # doit afficher « No issues found! »
 ```
 
-Au 6 novembre 2026 : **82 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
+Au 6 novembre 2026 : **86 tests passent** et `flutter analyze` affiche **« No issues found! »** (voir [Nettoyage de l'analyse](#nettoyage-de-lanalyse-6-novembre-2026)).
 
 ## Organisation du travail
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/medecin_public_service.dart';
 import '../../widgets/champ_mot_de_passe.dart';
 import '../../widgets/regle_mot_de_passe.dart';
 
@@ -77,6 +78,9 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                   icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () async {
                     await _db.collection('medecins').doc(docs[index].id).delete();
+                    // Fiche publique retirée avec la fiche complète : le
+                    // médecin ne doit plus être proposé aux patients.
+                    await MedecinPublicService().retirer(data['userId']?.toString());
                   },
                 ),
               ),
@@ -262,7 +266,7 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                     'specialiteId': selectedSpecId ?? '',
                   });
 
-                  await _db.collection('medecins').add({
+                  final ficheMedecin = {
                     'prenom': prenomController.text,
                     'nom': nomController.text,
                     'email': emailController.text.trim(),
@@ -270,7 +274,12 @@ class _HopitalDetailScreenState extends State<HopitalDetailScreen> {
                     'specialiteId': selectedSpecId ?? '',
                     'hopitalId': widget.hopitalId,
                     'userId': result.user!.uid,
-                  });
+                  };
+                  await _db.collection('medecins').add(ficheMedecin);
+                  // Fiche PUBLIQUE (nom, prénom, spécialité, hôpital) : c'est
+                  // elle que voient visiteurs et patients, sans email ni
+                  // téléphone. Voir MedecinPublicService.
+                  await MedecinPublicService().publier(ficheMedecin);
 
                   if (context.mounted) Navigator.pop(context);
                   } on FirebaseAuthException catch (e) {
