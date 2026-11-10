@@ -4,11 +4,17 @@
 //  1. en-tête : date en 13 px gris, « Bonjour, Dr X » 24 px w800,
 //     bouton CLOCHE 44 px à droite (pastille rouge si notification) ;
 //  2. bannière de notification dégradable, fermable, 6 s ;
-//  3. carte « Prochain rendez-vous » (dégradé vertical #4B80FC→#28211A) ;
-//  4. trois tuiles de statistiques à icône pastelle ;
+//  3. zone HÉROS « Prochain rendez-vous » (dégradé G #2458D3→#28211A)
+//     avec bouton d'action blanc — variante vide « Aucun rendez-vous
+//     à venir » + « Voir le planning » quand rien n'est programmé ;
+//  4. UNE bande de statistiques : chiffres grands #16203A séparés par
+//     de fines lignes verticales, sans icône pastelle ni carte
+//     individuelle (compteurs animés au chargement) ;
 //  5. section « Rendez-vous d'aujourd'hui » + « Voir tout » ;
 //  6. liste du jour (cartes à boîte horaire 56 x 56).
-// La LOGIQUE (données + callbacks reçus du parent) est inchangée.
+// Apparition progressive en fondu enchaîné (Apparition) : discret,
+// jamais clignotant. La LOGIQUE (données + callbacks reçus du
+// parent) est inchangée.
 // ─────────────────────────────────────────────────────────────────────
 import 'dart:async';
 
@@ -112,8 +118,10 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
     super.dispose();
   }
 
-  /// Carte « Prochain rendez-vous » (dégradé vertical maquette),
-  /// en haut du tableau de bord. Toute la carte ouvre le détail.
+  /// Zone héros « Prochain rendez-vous » (dégradé G maquette
+  /// #2458D3→#28211A), en haut du tableau de bord : le patient, en
+  /// grand, est l'élément le plus visible de l'écran. Toute la carte
+  /// ouvre le détail ; le bouton blanc redit l'action (cible 44 px).
   Widget _carteProchain(RendezVous prochain) {
     // Sous-titre : motif · spécialité (chacun toléré vide).
     final motif = (prochain.motif ?? '').trim();
@@ -128,7 +136,7 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: MaquetteDegrades.carteProchain,
+          gradient: MaquetteDegrades.principal,
           borderRadius: BorderRadius.circular(MaquetteRayons.carteHaute),
         ),
         child: Column(
@@ -159,7 +167,7 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
                   child: Text(
                     prochain.heure,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: MaquetteCouleurs.bleu,
                     ),
@@ -168,13 +176,14 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
               ],
             ),
             const SizedBox(height: 12),
-            // Nom du patient, en grand blanc (22 px w800).
+            // Nom du patient, en grand blanc (26 px w800).
             Text(
               prochain.patientNomComplet,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 22,
+                fontSize: 26,
+                height: 1.1,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
               ),
@@ -186,21 +195,94 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
-            const SizedBox(height: 14),
-            // Lien « Voir le détail » + chevron.
-            Row(
-              children: const [
-                Text(
-                  'Voir le détail',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 18, color: Colors.white),
-              ],
+            const SizedBox(height: 16),
+            // Bouton d'action : pilule blanche pleine largeur.
+            _boutonHero(
+              'Voir le détail',
+              () => widget.onTapRendezVous(prochain),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Variante « rien à venir » de la zone héros : un vrai message
+  /// utile et un bouton d'action — jamais un vide ni un « 0 » seul.
+  Widget _carteHeroVide() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: MaquetteDegrades.principal,
+        borderRadius: BorderRadius.circular(MaquetteRayons.carteHaute),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Prochain rendez-vous',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFD6E2FB),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Aucun rendez-vous à venir',
+            style: TextStyle(
+              fontSize: 24,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Vos patients peuvent prendre rendez-vous en ligne.\n'
+            'Profitez-en pour consulter vos disponibilités.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: Colors.white70,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _boutonHero('Voir le planning', widget.onVoirPlanning),
+        ],
+      ),
+    );
+  }
+
+  /// Bouton d'action d'une zone héros : pilule blanche, texte bleu,
+  /// hauteur 44 px (cible tactile minimale de la maquette).
+  Widget _boutonHero(String libelle, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: maquetteCibleMin,
+        width: double.infinity,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(MaquetteRayons.pillule),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              libelle,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: MaquetteCouleurs.bleu,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: MaquetteCouleurs.bleu,
             ),
           ],
         ),
@@ -257,7 +339,7 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
         if (duJour.isEmpty)
           const EtatVide(
             message: 'Aucun rendez-vous aujourd\'hui',
-            detail: 'Profitez-en pour préparer vos consultations.',
+            detail: 'Profitez-en pour consulter vos disponibilités.',
           )
         else
           ...duJour.asMap().entries.map(
@@ -342,45 +424,26 @@ class _AccueilMedecinState extends State<AccueilMedecin> {
             const SizedBox(height: 12),
           ],
 
-          // ── 3. Carte « Prochain rendez-vous » (dégradé vertical) ─
-          if (prochain != null) ...[
-            _carteProchain(prochain),
-            const SizedBox(height: 16),
-          ],
+          // ── 3. Zone héros : prochain RDV (ou variante vide) ───────
+          Apparition(
+            delaiMs: 0,
+            child: prochain != null
+                ? _carteProchain(prochain)
+                : _carteHeroVide(),
+          ),
+          const SizedBox(height: 16),
 
-          // ── 4. Trois tuiles de statistiques (icônes pastel) ──────
-          Row(
-            children: [
-              Expanded(
-                child: TuileStatSpec(
-                  icone: Icons.calendar_month_outlined,
-                  couleurIcone: MaquetteCouleurs.bleu,
-                  fondPastel: MaquetteCouleurs.bleuClair,
-                  valeur: duJour.length.toString(),
-                  libelle: 'RDV aujourd\'hui',
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TuileStatSpec(
-                  icone: Icons.schedule,
-                  couleurIcone: MaquetteCouleurs.attenteTexte,
-                  fondPastel: MaquetteCouleurs.attenteFond,
-                  valeur: aVenir.toString(),
-                  libelle: 'À venir',
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TuileStatSpec(
-                  icone: Icons.people_alt_outlined,
-                  couleurIcone: MaquetteCouleurs.confirmeTexte,
-                  fondPastel: MaquetteCouleurs.confirmeFond,
-                  valeur: widget.patientsSuivis.toString(),
-                  libelle: 'Patients suivis',
-                ),
-              ),
-            ],
+          // ── 4. Bande de statistiques : UNE bande, chiffres grands,
+          // filets verticaux, compteurs animés ──────────────────────
+          Apparition(
+            delaiMs: 60,
+            child: BandeStatsSpec(
+              chiffres: [
+                (valeur: duJour.length, libelle: 'RDV aujourd\'hui'),
+                (valeur: aVenir, libelle: 'À venir'),
+                (valeur: widget.patientsSuivis, libelle: 'Patients suivis'),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 

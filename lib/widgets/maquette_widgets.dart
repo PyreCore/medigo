@@ -503,6 +503,157 @@ class TuileStatSpec extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// BANDE DE STATISTIQUES (redesign des tableaux de bord) : UNE seule
+// bande blanche posée à plat — ni ombre, ni bordure — chiffres grands
+// #16203A séparés par de fines lignes verticales, libellés 12 px gris.
+// Ni icône en pastille, ni carte individuelle : la donnée seule porte
+// le regard. Remplace les trois tuiles à icône pastelle (TuileStatSpec
+// reste disponible pour les écrans non redessinés).
+// ─────────────────────────────────────────────────────────────────────
+
+/// Un chiffre de la bande : valeur animée + petit libellé.
+typedef ChiffreStat = ({int valeur, String libelle});
+
+class BandeStatsSpec extends StatelessWidget {
+  final List<ChiffreStat> chiffres;
+
+  const BandeStatsSpec({super.key, required this.chiffres});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 4),
+      decoration: const BoxDecoration(
+        color: MaquetteCouleurs.surface,
+        borderRadius: BorderRadius.all(Radius.circular(MaquetteRayons.carte)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (var i = 0; i < chiffres.length; i++) ...[
+            if (i > 0)
+              // Filet vertical fin (1 px) : sépare deux chiffres sans
+              // créer une « carte » par valeur.
+              Container(
+                width: 1,
+                height: 46,
+                color: MaquetteCouleurs.bordure,
+              ),
+            Expanded(child: _CelluleStat(chiffre: chiffres[i])),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Une case de la bande : compteur animé + libellé centré.
+class _CelluleStat extends StatelessWidget {
+  final ChiffreStat chiffre;
+
+  const _CelluleStat({required this.chiffre});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CompteurAnime(
+            valeur: chiffre.valeur,
+            style: const TextStyle(
+              fontSize: 30,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: MaquetteCouleurs.texte,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            chiffre.libelle,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.2,
+              color: MaquetteCouleurs.texteSecondaire,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// COMPTEUR ANIMÉ : le chiffre rejoint sa nouvelle valeur en ~600 ms
+// (ease-out), au chargement d'abord (depuis 0), puis quand la donnée
+// change. Si la valeur ne change pas — rechargement automatique toutes
+// les 5 s — rien ne bouge : silencieux, jamais clignotant.
+// ─────────────────────────────────────────────────────────────────────
+class CompteurAnime extends StatefulWidget {
+  final int valeur;
+  final TextStyle? style;
+  final Duration duree;
+
+  const CompteurAnime({
+    super.key,
+    required this.valeur,
+    this.style,
+    this.duree = const Duration(milliseconds: 600),
+  });
+
+  @override
+  State<CompteurAnime> createState() => _CompteurAnimeState();
+}
+
+class _CompteurAnimeState extends State<CompteurAnime>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  /// Valeur de départ de l'animation (0 au premier affichage).
+  int _depart = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duree)
+      ..forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant CompteurAnime ancien) {
+    super.didUpdateWidget(ancien);
+    if (ancien.valeur != widget.valeur) {
+      // La donnée a changé : on part de l'ANCIEN chiffre (pas de retour
+      // à zéro, qui clignoterait à chaque rechargement).
+      _depart = ancien.valeur;
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final nombre =
+            (_depart + (widget.valeur - _depart) * _controller.value).round();
+        return Text(nombre.toString(), style: widget.style);
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Titre de section 17 px w800 + lien d'action 13 px w700 bleu
 // (« Voir tout ») (§4.1).
 // ─────────────────────────────────────────────────────────────────────
@@ -565,6 +716,11 @@ class BoutonDegradeSpec extends StatelessWidget {
   final double hauteur;
   final IconData? icone;
 
+  /// Nombre de lignes du libellé : 1 (défaut) avec ellipse, 2 pour les
+  /// boutons étroits (rangées de deux boutons) où le libellé complet
+  /// tient mieux sur deux lignes que tronqué.
+  final int maxLines;
+
   /// (AJOUT) Indicateur de progression pendant un envoi : le libellé
   /// est remplacé par un spinner blanc. `onPressed` reste l'info de
   /// « bouton actif » (non null pendant l'envoi : le dégradé reste).
@@ -577,6 +733,7 @@ class BoutonDegradeSpec extends StatelessWidget {
     this.pleineLargeur = true,
     this.hauteur = 52,
     this.icone,
+    this.maxLines = 1,
     this.chargement = false,
   });
 
@@ -619,7 +776,7 @@ class BoutonDegradeSpec extends StatelessWidget {
                     Flexible(
                       child: Text(
                         texte,
-                        maxLines: 1,
+                        maxLines: maxLines,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 15,

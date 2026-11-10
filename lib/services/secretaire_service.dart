@@ -299,14 +299,22 @@ class SecretaireService {
     });
   }
 
-  /// Programme un nouveau rendez-vous pour un patient avec un médecin.
+  /// Corps du document "rendez_vous" écrit au guichet.
   ///
-  /// Comme PatientService, on écrit le rendez-vous PUIS son occupation de
-  /// créneau : sans la seconde écriture, l'heure programmée au guichet
-  /// resterait affichée comme disponible en ligne, et deux patients
-  /// pourraient la prendre.
-  Future<void> programmerRendezVous({
+  /// Exposé en statique pour que les tests vérifient le schéma d'écriture
+  /// SANS Firestore (FirebaseFirestore.instance exigerait une
+  /// initialisation de Firebase) : c'est exactement l'objet que
+  /// [programmerRendezVous] envoie à Firestore.
+  static Map<String, dynamic> corpsRendezVous({
     required String patientId,
+    // Identifiant du COMPTE du patient (champ "userId" du dossier), et non
+    // l'id du dossier : c'est celui-ci que l'espace Patient utilise pour
+    // filtrer ses rendez-vous (.where('patientUid')) et que vérifient les
+    // règles de lecture (firestore.rules, match /rendez_vous). Sans lui,
+    // un rendez-vous programmé au guichet reste invisible et illisible
+    // pour le patient connecté. Null si le patient n'a pas de compte
+    // (enregistrement au guichet seul) : le champ est alors omis.
+    String? patientUid,
     required String patientNom,
     required String patientPrenom,
     required String medecinId,
@@ -315,9 +323,11 @@ class SecretaireService {
     required DateTime date,
     required String heure,
     String? motif,
-  }) async {
-    final ref = await _db.collection('rendez_vous').add({
+  }) {
+    return {
       'patientId': patientId,
+      // Null-aware element : envoyé seulement si le patient a un compte.
+      'patientUid': ?patientUid,
       'patientNom': patientNom,
       'patientPrenom': patientPrenom,
       'medecinId': medecinId,
@@ -330,7 +340,43 @@ class SecretaireService {
       'statut': 'en_attente',
       // Null-aware element : envoyé seulement si un motif a été saisi.
       'motif': ?motif,
-    });
+    };
+  }
+
+  /// Programme un nouveau rendez-vous pour un patient avec un médecin.
+  ///
+  /// Comme PatientService, on écrit le rendez-vous PUIS son occupation de
+  /// créneau : sans la seconde écriture, l'heure programmée au guichet
+  /// resterait affichée comme disponible en ligne, et deux patients
+  /// pourraient la prendre.
+  Future<void> programmerRendezVous({
+    required String patientId,
+    // cf. corpsRendezVous : uid du COMPTE, indispensable à la lecture du
+    // rendez-vous par le patient.
+    String? patientUid,
+    required String patientNom,
+    required String patientPrenom,
+    required String medecinId,
+    required String medecinNom,
+    required String hopitalId,
+    required DateTime date,
+    required String heure,
+    String? motif,
+  }) async {
+    final ref = await _db.collection('rendez_vous').add(
+      corpsRendezVous(
+        patientId: patientId,
+        patientUid: patientUid,
+        patientNom: patientNom,
+        patientPrenom: patientPrenom,
+        medecinId: medecinId,
+        medecinNom: medecinNom,
+        hopitalId: hopitalId,
+        date: date,
+        heure: heure,
+        motif: motif,
+      ),
+    );
 
     await _creneaux.reserver(
       rdvId: ref.id,

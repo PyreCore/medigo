@@ -1,19 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────
 // ACCUEIL SECRÉTAIRE — tableau de bord « RDV de l'hôpital ».
 // Aligné sur la maquette « Medigo Médecin et Secrétaire » et sur
-// l'accueil médecin :
+// l'accueil médecin (même grammaire visuelle) :
 //  1. en-tête : date au-dessus, salutation en grand, avatar à droite ;
-//  2. carte « Prochain rendez-vous » en dégradé signature ;
-//  3. rangée de 3 métriques à icône pastel ;
+//  2. zone HÉROS « Demandes à traiter » (dégradé G #2458D3→#28211A) :
+//     le nombre de demandes en attente, en grand, bouton blanc
+//     « Traiter les demandes » — variante vide « Aucune demande en
+//     attente » + « Programmer un rendez-vous » ;
+//  3. UNE bande de statistiques (chiffres #16203A séparés par de fins
+//     filets verticaux, compteurs animés, sans icône pastelle) ;
 //  4. actions rapides (spécifiques au secrétaire : programmer un RDV,
 //     nouveau patient) ;
 //  5. liste des RDV + ≥ 900 px : panneau « Répartition du jour ».
-// La LOGIQUE (données + callbacks) est inchangée.
+// Apparition progressive en fondu enchaîné (Apparition) : discret,
+// jamais clignotant. La LOGIQUE (données + callbacks) est inchangée.
 // ─────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
-import '../../models/secretaire.dart';
+
 import '../../models/rendez_vous.dart';
-import '../../theme/medigo_theme.dart';
+import '../../models/secretaire.dart';
+import '../../theme/maquette_tokens.dart';
+import '../../widgets/maquette_widgets.dart';
 import '../../widgets/rendez_vous_card.dart';
 import '../../widgets/ui_kit.dart';
 
@@ -59,110 +66,193 @@ class AccueilSecretaire extends StatelessWidget {
     return motif;
   }
 
-  /// Carte « Prochain rendez-vous » (dégradé signature), en haut du
-  /// tableau de bord comme dans la maquette.
-  Widget _carteProchain(RendezVous prochain) {
-    return CarteGradientMedigo(
-      onTap: () => onTapRendezVous?.call(prochain),
+  /// Zone héros « Demandes à traiter » (dégradé G maquette
+  /// #2458D3→#28211A) : le nombre de demandes en attente, en grand,
+  /// est l'élément le plus visible de l'écran du secrétaire. Toute la
+  /// carte ouvre la première demande ; le bouton blanc redit l'action.
+  Widget _carteHeroDemandes(int nbDemandes, RendezVous? premiereDemande) {
+    final actionable =
+        onTapRendezVous != null && premiereDemande != null;
+    return GestureDetector(
+      onTap: actionable
+          ? () => onTapRendezVous!(premiereDemande)
+          : null,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: MaquetteDegrades.principal,
+          borderRadius: BorderRadius.circular(MaquetteRayons.carteHaute),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Demandes à traiter',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFD6E2FB),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Le chiffre, en grand blanc (56 px w800) — compteur animé
+            // au chargement. C'est l'action prioritaire du secrétaire.
+            CompteurAnime(
+              valeur: nbDemandes,
+              style: const TextStyle(
+                fontSize: 56,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'en attente de confirmation',
+              style: TextStyle(fontSize: 14, color: Colors.white70),
+            ),
+            if (actionable) ...[
+              const SizedBox(height: 16),
+              // Bouton d'action : pilule blanche pleine largeur.
+              _boutonHero(
+                'Traiter les demandes',
+                () => onTapRendezVous!(premiereDemande),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Variante « aucune demande » de la zone héros : un vrai message
+  /// utile et une action de secours — jamais un « 0 » seul.
+  Widget _carteHeroVideDemandes() {
+    return Container(
       padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: MaquetteDegrades.principal,
+        borderRadius: BorderRadius.circular(MaquetteRayons.carteHaute),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Prochain rendez-vous',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white70,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(Rayons.pillule),
-                ),
-                child: Text(
-                  prochain.heure,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-              ),
-            ],
+          const Text(
+            'Demandes à traiter',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFD6E2FB),
+            ),
           ),
           const SizedBox(height: 12),
-          Text(
-            prochain.patientNomComplet,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 22,
+          const Text(
+            'Aucune demande en attente',
+            style: TextStyle(
+              fontSize: 24,
+              height: 1.1,
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            _sousTitreRdv(prochain),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, color: Colors.white70),
+          const SizedBox(height: 6),
+          const Text(
+            'Toutes les demandes sont traitées.\n'
+            'Programmez le prochain rendez-vous de votre hôpital.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: Colors.white70,
+            ),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: const [
-              Text(
-                'Voir le détail',
-                style: TextStyle(
+          if (onNouveauRendezVous != null) ...[
+            const SizedBox(height: 16),
+            _boutonHero('Programmer un rendez-vous', onNouveauRendezVous),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Bouton d'action d'une zone héros : pilule blanche, texte bleu,
+  /// hauteur 44 px (cible tactile minimale de la maquette).
+  Widget _boutonHero(String libelle, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: maquetteCibleMin,
+        width: double.infinity,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(MaquetteRayons.pillule),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Flexible : sur un écran étroit (360 px), le libellé
+            // s'adapte à la place restante au lieu de déborder.
+            Flexible(
+              child: Text(
+                libelle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: MaquetteCouleurs.bleu,
                 ),
               ),
-              SizedBox(width: 4),
-              Icon(Icons.chevron_right, size: 18, color: Colors.white),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: MaquetteCouleurs.bleu,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Prochain rendez-vous « à venir » (en attente ou confirmé).
-    RendezVous? prochain;
+    // Demandes en attente : compteur du service + première demande de
+    // la liste (cible du bouton « Traiter les demandes »).
+    final demandes = statistiques['enAttente'] ?? 0;
+    RendezVous? premiereDemande;
     for (final rdv in rendezVousDuJour) {
-      if (rdv.statut == StatutRendezVous.enAttente ||
-          rdv.statut == StatutRendezVous.confirme) {
-        prochain = rdv;
+      if (rdv.statut == StatutRendezVous.enAttente) {
+        premiereDemande = rdv;
         break;
       }
     }
+    // Les stats et la liste viennent de deux requêtes distinctes :
+    // si elles divergent brièvement (liste avec demande, compteur à 0),
+    // on affiche 1 plutôt qu'un héros « 0 » avec un bouton dedans.
+    final nbDemandes = demandes > 0
+        ? demandes
+        : (premiereDemande != null ? 1 : 0);
 
     // Liste des rendez-vous du jour (cartes maquette + médecin affiché).
     final listeRdv = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const EnTeteSection(titre: 'Rendez-vous du jour'),
+        const EnTeteSectionSpec(titre: 'Rendez-vous du jour'),
         const SizedBox(height: 8),
         if (rendezVousDuJour.isEmpty)
+          // Message utile seul : l'action « Programmer » est déjà
+          // présente juste au-dessus (actions rapides) et dans le héros.
           const EtatVide(
             message: 'Aucun rendez-vous aujourd\'hui',
-            detail: 'Ils apparaîtront ici dès qu\'ils seront créés.',
+            detail: 'Programmez-en un pour commencer la journée.',
           )
         else
           ...rendezVousDuJour.asMap().entries.map(
             (entree) => Apparition(
               delaiMs: 160 + (entree.key * 60),
-              child: CarteRdvTableau(
+              child: CarteRdvTableauSpec(
                 rdv: entree.value,
                 sousTitre: _sousTitreRdv(entree.value),
                 onTap: onTapRendezVous == null
@@ -178,7 +268,7 @@ class AccueilSecretaire extends StatelessWidget {
     final panneau = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const EnTeteSection(titre: 'Répartition du jour'),
+        const EnTeteSectionSpec(titre: 'Répartition du jour'),
         const SizedBox(height: 8),
         RepartitionStatuts(rdvs: rendezVousDuJour),
       ],
@@ -202,7 +292,7 @@ class AccueilSecretaire extends StatelessWidget {
                         dateDuJour(),
                         style: const TextStyle(
                           fontSize: 14,
-                          color: AppColors.texteFaible,
+                          color: MaquetteCouleurs.texteSecondaire,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -211,9 +301,9 @@ class AccueilSecretaire extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 23,
+                          fontSize: MaquetteTypo.titreEcran,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.navy,
+                          color: MaquetteCouleurs.texte,
                         ),
                       ),
                     ],
@@ -222,7 +312,7 @@ class AccueilSecretaire extends StatelessWidget {
                 const SizedBox(width: 12),
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: AppColors.bleuClair,
+                  backgroundColor: MaquetteCouleurs.bleuClair,
                   backgroundImage: imageProfil(photoUrl),
                   child: photoUrl == null
                       ? Text(
@@ -230,7 +320,7 @@ class AccueilSecretaire extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.bleuVif,
+                            color: MaquetteCouleurs.bleu,
                           ),
                         )
                       : null,
@@ -240,45 +330,32 @@ class AccueilSecretaire extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // ── 2. Carte « Prochain rendez-vous » (dégradé) ───────────
-          if (prochain != null) ...[
-            Apparition(delaiMs: 60, child: _carteProchain(prochain)),
-            const SizedBox(height: 16),
-          ],
+          // ── 2. Zone héros : demandes à traiter (ou variante vide) ──
+          Apparition(
+            delaiMs: 60,
+            child: nbDemandes > 0
+                ? _carteHeroDemandes(nbDemandes, premiereDemande)
+                : _carteHeroVideDemandes(),
+          ),
+          const SizedBox(height: 16),
 
-          // ── 3. Métriques du jour (icônes pastel) ─────────────────
+          // ── 3. Bande de statistiques : UNE bande, chiffres grands,
+          // filets verticaux, compteurs animés ──────────────────────
           Apparition(
             delaiMs: 120,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TuileStatIcone(
-                    icone: Icons.calendar_month_outlined,
-                    couleur: AppColors.bleuVif,
-                    fondPastel: AppColors.bleuClair,
-                    valeur: (statistiques['rdvAujourdhui'] ?? 0).toString(),
-                    libelle: 'RDV aujourd\'hui',
-                  ),
+            child: BandeStatsSpec(
+              chiffres: [
+                (
+                  valeur: statistiques['rdvAujourdhui'] ?? 0,
+                  libelle: 'RDV aujourd\'hui',
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TuileStatIcone(
-                    icone: Icons.schedule,
-                    couleur: AppColors.ambre,
-                    fondPastel: AppColors.ambreClair,
-                    valeur: (statistiques['enAttente'] ?? 0).toString(),
-                    libelle: 'En attente',
-                  ),
+                (
+                  valeur: statistiques['enAttente'] ?? 0,
+                  libelle: 'En attente',
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TuileStatIcone(
-                    icone: Icons.people_alt_outlined,
-                    couleur: AppColors.vertSante,
-                    fondPastel: AppColors.vertClair,
-                    valeur: (statistiques['totalPatients'] ?? 0).toString(),
-                    libelle: 'Patients suivis',
-                  ),
+                (
+                  valeur: statistiques['totalPatients'] ?? 0,
+                  libelle: 'Patients suivis',
                 ),
               ],
             ),
@@ -293,9 +370,10 @@ class AccueilSecretaire extends StatelessWidget {
                 children: [
                   if (onNouveauRendezVous != null) ...[
                     Expanded(
-                      child: BoutonPrincipal(
+                      child: BoutonDegradeSpec(
                         texte: 'Programmer un rendez-vous',
                         hauteur: 52,
+                        maxLines: 2,
                         onPressed: onNouveauRendezVous,
                       ),
                     ),
@@ -303,7 +381,7 @@ class AccueilSecretaire extends StatelessWidget {
                   if (onNouveauPatient != null) ...[
                     if (onNouveauRendezVous != null) const SizedBox(width: 12),
                     Expanded(
-                      child: BoutonContour(
+                      child: BoutonContourSpec(
                         texte: 'Nouveau patient',
                         hauteur: 52,
                         onPressed: onNouveauPatient,

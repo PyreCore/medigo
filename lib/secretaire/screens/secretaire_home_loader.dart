@@ -141,6 +141,9 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
   }) async {
     await _service.programmerRendezVous(
       patientId: patient.id,
+      // patient.userId = uid du COMPTE : le rendez-vous du guichet doit
+      // apparaître dans l'espace Patient, qui filtre sur "patientUid".
+      patientUid: patient.userId,
       patientNom: patient.nom,
       patientPrenom: patient.prenom,
       medecinId: medecin.id,
