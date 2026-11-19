@@ -41,6 +41,12 @@ class DetailRendezVousMedecin extends StatefulWidget {
   /// affiche alors un bloc neutre « Consultation non terminée ».
   final bool consultationNonTerminee;
 
+  /// (AJOUT) Met le rendez-vous TERMINÉ dans la corbeille du médecin —
+  /// affiché uniquement sur un rendez-vous terminé et si le parent a
+  /// fourni le callback. Le chargeur affiche le message de succès puis
+  /// l'écran de détail se referme.
+  final Future<void> Function()? onMettreALaCorbeille;
+
   const DetailRendezVousMedecin({
     super.key,
     required this.rdv,
@@ -48,6 +54,7 @@ class DetailRendezVousMedecin extends StatefulWidget {
     this.onTerminer,
     this.onNonTermine,
     this.consultationNonTerminee = false,
+    this.onMettreALaCorbeille,
   });
 
   @override
@@ -320,7 +327,7 @@ class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
       case StatutRendezVous.termine:
         // Consultation marquée « non terminée » : bloc neutre orange,
         // distinct du gris « Consultation terminée ».
-        return widget.consultationNonTerminee
+        final bloc = widget.consultationNonTerminee
             ? const BlocEtatSpec(
                 texte: 'Consultation non terminée',
                 fond: MaquetteCouleurs.attenteFond,
@@ -331,6 +338,22 @@ class _DetailRendezVousMedecinState extends State<DetailRendezVousMedecin> {
                 fond: MaquetteCouleurs.termineFond,
                 couleurTexte: MaquetteCouleurs.termineTexte,
               );
+        // (AJOUT) Corbeille : action réservée aux rendez-vous TERMINÉS,
+        // seul statut éligible côté médecin. Reversible (Restaurer
+        // existe) : pas de boîte de confirmation, le message de succès
+        // vient du chargeur après le rechargement.
+        if (widget.onMettreALaCorbeille == null) return bloc;
+        return Column(
+          children: [
+            bloc,
+            const SizedBox(height: 10),
+            BoutonContourSpec(
+              texte: 'Mettre à la corbeille',
+              couleur: MaquetteCouleurs.refuseTexte,
+              onPressed: widget.onMettreALaCorbeille,
+            ),
+          ],
+        );
       case StatutRendezVous.refuse:
       case StatutRendezVous.annule:
         return const BlocEtatSpec(

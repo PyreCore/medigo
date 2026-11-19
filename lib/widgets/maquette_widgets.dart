@@ -59,6 +59,70 @@ class CarteSpec extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Ligne de liste en style « filet » (point 4) : au lieu d'une carte
+// individuelle par ligne, les lignes sont COLLÉES les unes aux autres
+// à l'intérieur d'un seul bloc blanc ; chaque ligne porte un trait de
+// 1 px en bas (le trait de la dernière ligne fait aussi le fond du
+// bloc) et des rayons uniquement sur la première / la dernière ligne.
+// `premiere` / `derniere` positionnent la ligne dans son bloc ; une
+// ligne isolée (défaut) reste carrée.
+// ─────────────────────────────────────────────────────────────────────
+class LigneFiletSpec extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry padding;
+
+  /// Première ligne du bloc → rayons en haut.
+  final bool premiere;
+
+  /// Dernière ligne du bloc → rayons en bas.
+  final bool derniere;
+
+  const LigneFiletSpec({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    this.premiere = false,
+    this.derniere = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final container = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: MaquetteCouleurs.surface,
+        border: Border(
+          top: premiere
+              ? const BorderSide(color: MaquetteCouleurs.bordure)
+              : BorderSide.none,
+          // Trait sous CHAQUE ligne : il sert de séparateur entre deux
+          // lignes et de bord bas du bloc sur la dernière.
+          bottom: const BorderSide(color: MaquetteCouleurs.bordure),
+          left: const BorderSide(color: MaquetteCouleurs.bordure),
+          right: const BorderSide(color: MaquetteCouleurs.bordure),
+        ),
+        borderRadius: BorderRadius.vertical(
+          top: premiere
+              ? const Radius.circular(MaquetteRayons.carte)
+              : Radius.zero,
+          bottom: derniere
+              ? const Radius.circular(MaquetteRayons.carte)
+              : Radius.zero,
+        ),
+      ),
+      child: child,
+    );
+    if (onTap == null) return container;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: container),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Pastille de statut (pilule) : fond + texte selon le statut.
 // Refusé ET Annulé sont ROUGES (§1 des statuts).
 // ─────────────────────────────────────────────────────────────────────
@@ -350,20 +414,28 @@ class CarteRdvListeSpec extends StatelessWidget {
   /// Consultation marquée « non terminée » → pastille « Non terminé ».
   final bool nonTermine;
 
+  /// Position dans un bloc de lignes réglées (point 4) : première /
+  /// dernière ligne du bloc → rayons haut / bas.
+  final bool premiere;
+  final bool derniere;
+
   const CarteRdvListeSpec({
     super.key,
     required this.rdv,
     this.onTap,
     this.sousTitre,
     this.nonTermine = false,
+    this.premiere = false,
+    this.derniere = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final motif = (sousTitre ?? rdv.motif ?? '').trim();
-    return CarteSpec(
-      margin: const EdgeInsets.only(bottom: 12),
+    return LigneFiletSpec(
       padding: const EdgeInsets.all(14),
+      premiere: premiere,
+      derniere: derniere,
       onTap: onTap,
       child: Row(
         children: [

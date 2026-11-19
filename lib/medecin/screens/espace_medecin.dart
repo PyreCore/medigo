@@ -48,6 +48,26 @@ class EspaceMedecin extends StatefulWidget {
 
   final VoidCallback? onDeconnexion;
 
+  // ── Corbeille (ajout) ────────────────────────────────────────────
+
+  /// Contenu de la corbeille du médecin : rendez-vous + date de mise à
+  /// la corbeille (record structurel, cf. MedecinService.getCorbeille).
+  final List<({RendezVous rdv, DateTime corbeilleLe})> corbeille;
+
+  /// Appelé à l'ouverture de l'onglet Corbeille (purge à 30 jours puis
+  /// rechargement) — voir MedecinHomeLoader._ouvrirCorbeille.
+  final Future<void> Function()? onOuvrirCorbeille;
+
+  /// Met un rendez-vous TERMINÉ dans la corbeille, depuis le détail.
+  final Future<void> Function(RendezVous rdv)? onMettreALaCorbeille;
+
+  /// Restaure un rendez-vous corbeillé dans les listes normales.
+  final Future<void> Function(RendezVous rdv)? onRestaurerRendezVous;
+
+  /// Suppression définitive (la confirmation est demandée dans
+  /// l'écran de liste avant l'appel).
+  final Future<void> Function(RendezVous rdv)? onSupprimerRendezVous;
+
   const EspaceMedecin({
     super.key,
     required this.medecin,
@@ -60,6 +80,11 @@ class EspaceMedecin extends StatefulWidget {
     this.onTerminerRendezVous,
     this.onNonTermineRendezVous,
     this.onDeconnexion,
+    this.corbeille = const [],
+    this.onOuvrirCorbeille,
+    this.onMettreALaCorbeille,
+    this.onRestaurerRendezVous,
+    this.onSupprimerRendezVous,
   });
 
   @override
@@ -102,6 +127,15 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
           onNonTermine: widget.onNonTermineRendezVous == null
               ? null
               : () => widget.onNonTermineRendezVous!(rdv),
+          // Corbeille (ajout) : on attend l'écriture (chargeur →
+          // service → messageFlash) puis on referme le détail, comme
+          // pour Terminer / Non terminé.
+          onMettreALaCorbeille: widget.onMettreALaCorbeille == null
+              ? null
+              : () async {
+                  await widget.onMettreALaCorbeille!(rdv);
+                  if (mounted) Navigator.pop(context);
+                },
         ),
       ),
     );
@@ -128,6 +162,10 @@ class _EspaceMedecinState extends State<EspaceMedecin> {
         rendezVous: widget.rendezVousDuJour,
         idsNonTermines: widget.idsNonTermines,
         onTapRendezVous: _ouvrirDetailRdv,
+        corbeille: widget.corbeille,
+        onOuvrirCorbeille: widget.onOuvrirCorbeille,
+        onRestaurer: widget.onRestaurerRendezVous,
+        onSupprimerDefinitivement: widget.onSupprimerRendezVous,
       ),
       // L'onglet Disponibilités a besoin de l'identité du médecin pour lire
       // et écrire ses plages dans Firestore.

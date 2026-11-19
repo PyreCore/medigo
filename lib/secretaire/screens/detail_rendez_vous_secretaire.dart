@@ -16,12 +16,19 @@ class DetailRendezVousSecretaire extends StatelessWidget {
   // Refus avec motif : la secrétaire choisit une raison avant de confirmer.
   final Future<void> Function(RendezVous rdv, {String? motif}) onRefuser;
 
+  /// (AJOUT) Met le rendez-vous dans la corbeille de la secrétaire —
+  /// affiché uniquement pour les statuts éligibles (terminé / annulé /
+  /// refusé) et si le parent a fourni le callback. Le chargeur affiche
+  /// le message de succès puis l'écran de détail se referme.
+  final Future<void> Function(RendezVous rdv)? onMettreALaCorbeille;
+
   const DetailRendezVousSecretaire({
     super.key,
     required this.rdv,
     required this.onConfirmer,
     required this.onAnnuler,
     required this.onRefuser,
+    this.onMettreALaCorbeille,
   });
 
   // Carte dégradée : avatar + nom + médecin, puis Date / Heure / Motif.
@@ -175,6 +182,36 @@ class DetailRendezVousSecretaire extends StatelessWidget {
     );
   }
 
+  /// (AJOUT) Un rendez-vous terminé, annulé ou refusé peut être mis
+  /// dans la corbeille — jamais une demande en attente ou confirmée.
+  bool get _corbeilleEligible =>
+      onMettreALaCorbeille != null &&
+      (rdv.statut == StatutRendezVous.termine ||
+          rdv.statut == StatutRendezVous.annule ||
+          rdv.statut == StatutRendezVous.refuse);
+
+  // ── Pied « corbeille » (ajout) : bouton unique sur un rendez-vous
+  // terminé / annulé / refusé. Action réversible (Restaurer existe) :
+  // aucune boîte de confirmation, le message de succès vient du
+  // chargeur après le rechargement.
+  Widget _piedCorbeille() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.trait)),
+      ),
+      child: BoutonContour(
+        texte: 'Mettre à la corbeille',
+        couleur: AppColors.rouge,
+        pleineLargeur: true,
+        hauteur: 52,
+        onPressed: () => onMettreALaCorbeille!(rdv),
+      ),
+    );
+  }
+
   /// Ouvre l'écran de sélection du motif de refus.
   void _ouvrirRefus(BuildContext context) {
     Navigator.push(
@@ -250,8 +287,11 @@ class DetailRendezVousSecretaire extends StatelessWidget {
               ),
             ),
 
-            // ── Pied d'actions (seulement si en attente) ──────────────
-            if (enAttente) _piedActions(context),
+            // ── Pied d'actions ─────────────────────────────────────
+            if (enAttente)
+              _piedActions(context)
+            else if (_corbeilleEligible)
+              _piedCorbeille(),
           ],
         ),
       ),

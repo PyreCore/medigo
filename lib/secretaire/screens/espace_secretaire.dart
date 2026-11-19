@@ -63,6 +63,26 @@ class EspaceSecretaire extends StatefulWidget {
   final Future<void> Function()? onRafraichir;
   final VoidCallback? onDeconnexion;
 
+  // ── Corbeille (ajout) ────────────────────────────────────────────
+  /// Contenu de la corbeille : rendez-vous + date de mise à la
+  /// corbeille (record structurel, cf. SecretaireService.getCorbeille).
+  final List<({RendezVous rdv, DateTime corbeilleLe})> corbeille;
+
+  /// Appelé à l'ouverture de l'onglet Corbeille (purge à 30 jours puis
+  /// rechargement) — voir SecretaireHomeLoader._ouvrirCorbeille.
+  final Future<void> Function()? onOuvrirCorbeille;
+
+  /// Met un rendez-vous éligible (terminé / annulé / refusé) dans la
+  /// corbeille, depuis le détail.
+  final Future<void> Function(RendezVous rdv)? onMettreALaCorbeille;
+
+  /// Restaure un rendez-vous corbeillé dans les listes normales.
+  final Future<void> Function(RendezVous rdv)? onRestaurerRendezVous;
+
+  /// Suppression définitive d'un rendez-vous corbeillé (la confirmation
+  /// est demandée dans l'écran de liste avant l'appel).
+  final Future<void> Function(RendezVous rdv)? onSupprimerRendezVous;
+
   const EspaceSecretaire({
     super.key,
     required this.secretaire,
@@ -77,6 +97,11 @@ class EspaceSecretaire extends StatefulWidget {
     this.onRefuserRendezVous,
     this.onRafraichir,
     this.onDeconnexion,
+    this.corbeille = const [],
+    this.onOuvrirCorbeille,
+    this.onMettreALaCorbeille,
+    this.onRestaurerRendezVous,
+    this.onSupprimerRendezVous,
   });
 
   @override
@@ -121,6 +146,15 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
             // immédiat refermait le formulaire avant la fin du service.
             await widget.onRefuserRendezVous?.call(rdv, motif: motif);
           },
+          // Corbeille (ajout) : on attend l'écriture (chargeur →
+          // service → messageFlash) puis on referme le détail, comme
+          // pour Confirmer / Annuler.
+          onMettreALaCorbeille: widget.onMettreALaCorbeille == null
+              ? null
+              : (rdv) async {
+                  await widget.onMettreALaCorbeille!(rdv);
+                  if (mounted) Navigator.pop(context);
+                },
         ),
       ),
     );
@@ -208,6 +242,10 @@ class _EspaceSecretaireState extends State<EspaceSecretaire> {
         rendezVous: widget.rendezVousDuJour,
         onTapRendezVous: _ouvrirDetailRdv,
         onNouveauRendezVous: _ouvrirProgrammationRdv,
+        corbeille: widget.corbeille,
+        onOuvrirCorbeille: widget.onOuvrirCorbeille,
+        onRestaurer: widget.onRestaurerRendezVous,
+        onSupprimerDefinitivement: widget.onSupprimerRendezVous,
       ),
       // Gestion des horaires de TOUS les médecins de l'hôpital
       // (ajout / modification / validation des créneaux).

@@ -98,8 +98,17 @@ class MedecinService {
         .where('medecinId', isEqualTo: medecinId)
         .get();
 
+    // CORBEILLE : les rendez-vous mis à la corbeille par le médecin
+    // n'apparaissent plus dans ses listes normales. Filtre EN DART (et
+    // non where('corbeilleMedecinLe', isNull: true)) pour garder une
+    // requête à UN seul filtre d'égalité : un second filtre exigerait un
+    // index composite, et son absence bloquait déjà la connexion
+    // (failed-precondition, cf. le commentaire ci-dessus).
+    final docsVisibles = snapshot.docs
+        .where((doc) => doc.data()['corbeilleMedecinLe'] == null);
+
     // Conversion document → objet RendezVous ("traduction" des champs).
-    final liste = snapshot.docs.map((doc) {
+    final liste = docsVisibles.map((doc) {
       final data = doc.data();
       return RendezVous.fromJson({
         'id': doc.id,
@@ -138,7 +147,12 @@ class MedecinService {
         .where('medecinId', isEqualTo: medecinId)
         .get();
 
-    final liste = snapshot.docs.map((doc) {
+    // CORBEILLE : idem getRendezVousDuJour — exclusion faite en DART
+    // pour ne jamais dépendre d'un index composite.
+    final docsVisibles = snapshot.docs
+        .where((doc) => doc.data()['corbeilleMedecinLe'] == null);
+
+    final liste = docsVisibles.map((doc) {
       final data = doc.data();
       return RendezVous.fromJson({
         'id': doc.id,
@@ -315,5 +329,142 @@ class MedecinService {
       dateNaissance: naissance is Timestamp ? naissance.toDate() : null,
       groupeSanguin: (data['groupeSanguin'] ?? '') as String?,
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // CORBEILLE DU MÉDECIN (ajout) — indépendante de celle de la
+  // secrétaire : chaque rôle porte SON champ (corbeilleMedecinLe /
+  // corbeilleSecretaireLe), donc un rendez-vous peut être corbeillé par
+  // l'un sans l'être par l'autre.
+  //
+  // Le médecin ne met à la corbeille que SES rendez-vous TERMINÉS (il
+  // n'affiche déjà que confirmés et terminés). Même mécanique que
+  // SecretaireService : Timestamp posé au serveur à la mise en
+  // corbeille, retiré à la restauration, purges et exclusions sans
+  // index composite (filtres Dart post-requête).
+  // ─────────────────────────────────────────────────────────────────
+
+  /// Statuts éligibles à la corbeille côté médecin : uniquement
+  /// « termine » (les refusés/annulés sont gérés par la secrétaire et
+  /// n'apparaissent pas dans ses listes).
+  static const Set<String> statutsCorbeilleMedecin = {'termine'};
+
+  /// (AJOUT) Traduit un document « rendez_vous » en objet RendezVous :
+  /// exactement le mappage de getTousRendezVous, factorisé pour la
+  /// corbeille (le modèle, hors périmètre, ignore les champs corbeille).
+  static RendezVous _versRendezVous(String id, Map<String, dynamic> data) {
+    return RendezVous.fromJson({
+      'id': id,
+      'patient_nom': data['patientNom'],
+      'patient_prenom': data['patientPrenom'],
+      'date': (data['date'] as Timestamp).toDate().toIso8601String(),
+      'heure': data['heure'],
+      'statut': data['statut'],
+      'motif': data['motif'],
+    });
+  }
+
+  /// (AJOUT) Contenu de la corbeille du médecin, avec la date de mise à
+  /// la corbeille de chaque rendez-vous (du plus récent au plus
+  /// ancien). Record structurel : le modèle ne transporte pas
+  /// corbeilleMedecinLe (hors périmètre).
+  Future<List<({RendezVous rdv, DateTime corbeilleLe})>> getCorbeille(
+    String medecinId,
+  ) async {
+    final snapshot = await _db
+        .collection('rendez_vous')
+        .where('medecinId', isEqualTo: medecinId)
+        .get();
+
+    final entrees = <({RendezVous rdv, DateTime corbeilleLe})>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final corbeilleLe = data['corbeilleMedecinLe'];
+      // Dans la corbeille = champ posé (Timestamp), absent = liste normale.
+      if (corbeilleLe is! Timestamp) continue;
+      entrees.add((
+        rdv: _versRendezVous(doc.id, data),
+        corbeilleLe: corbeilleLe.toDate(),
+      ));
+    }
+    entrees.sort((a, b) => b.corbeilleLe.compareTo(a.corbeilleLe));
+    return entrees;
+  }
+
+  /// (AJOUT) Met un rendez-vous TERMINÉ du médecin dans sa corbeille.
+  ///
+  /// Statut relu avant écriture (seul « termine » est éligible) ; la
+  /// règle Firestore impose en plus que le document appartienne bien au
+  /// médecin connecté (resource.data.medecinId == uid) — mise à jour et
+  /// suppression refusées sinon.
+  Future<void> mettreALaCorbeille(String rdvId) async {
+    final doc = _db.collection('rendez_vous').doc(rdvId);
+    final snapshot = await doc.get();
+    final statut = snapshot.data()?['statut'];
+    if (!statutsCorbeilleMedecin.contains(statut)) {
+      throw StateError(
+        'Seuls les rendez-vous terminés peuvent être mis à la '
+        'corbeille (statut actuel : $statut).',
+      );
+    }
+    await doc.update({'corbeilleMedecinLe': FieldValue.serverTimestamp()});
+  }
+
+  /// (AJOUT) Sort un rendez-vous de la corbeille du médecin : le champ
+  /// est retiré (FieldValue.delete) et il réapparaît dans ses listes.
+  Future<void> restaurer(String rdvId) async {
+    await _db
+        .collection('rendez_vous')
+        .doc(rdvId)
+        .update({'corbeilleMedecinLe': FieldValue.delete()});
+  }
+
+  /// (AJOUT) Suppression DÉFINITIVE du document (confirmation obligatoire
+  /// dans l'écran avant l'appel).
+  Future<void> supprimerDefinitivement(String rdvId) async {
+    await _db.collection('rendez_vous').doc(rdvId).delete();
+  }
+
+  /// (AJOUT) Purge de la corbeille du médecin, appelée à l'ouverture de
+  /// l'onglet : supprime les documents corbeillisés depuis PLUS de 30
+  /// jours, SEULEMENT au statut « annule » ou « refuse » (la règle
+  /// commune des deux corbeilles) — un « termine » reste en base pour
+  /// l'historique patient.
+  ///
+  /// En pratique la corbeille du médecin ne contient que des
+  /// « termine » : la méthode renverra0, elle existe pour respecter la
+  /// règle commune et rester si le périmètre s'élargit un jour.
+  Future<int> purgerCorbeille(String medecinId) async {
+    final snapshot = await _db
+        .collection('rendez_vous')
+        .where('medecinId', isEqualTo: medecinId)
+        .get();
+
+    final limite = DateTime.now().subtract(const Duration(days: 30));
+    final aSupprimer = <String>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final corbeilleLe = data['corbeilleMedecinLe'];
+      if (corbeilleLe is! Timestamp) continue; // pas dans la corbeille
+      if (corbeilleLe.toDate().isAfter(limite)) continue; // < 30 jours
+      if (data['statut'] != 'annule' && data['statut'] != 'refuse') {
+        continue; // « termine » reste en base (historique patient)
+      }
+      aSupprimer.add(doc.id);
+    }
+
+    // Lots de 400 : un batch Firestore plafonne à 500 opérations.
+    const tailleLot = 400;
+    for (var debut = 0; debut < aSupprimer.length; debut += tailleLot) {
+      final batch = _db.batch();
+      final fin = debut + tailleLot < aSupprimer.length
+          ? debut + tailleLot
+          : aSupprimer.length;
+      for (var i = debut; i < fin; i++) {
+        batch.delete(_db.collection('rendez_vous').doc(aSupprimer[i]));
+      }
+      await batch.commit();
+    }
+    return aSupprimer.length;
   }
 }

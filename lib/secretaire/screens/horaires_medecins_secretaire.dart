@@ -24,6 +24,7 @@ import '../../models/disponibilite.dart';
 import '../../services/disponibilite_service.dart';
 import '../../theme/medigo_theme.dart';
 import '../../theme/maquette_tokens.dart';
+import '../../widgets/maquette_widgets.dart'; // LigneFiletSpec (filet)
 import '../../widgets/ui_kit.dart';
 
 class HorairesMedecinsSecretaire extends StatefulWidget {
@@ -375,6 +376,8 @@ class _HorairesMedecinsSecretaireState
                   _CarteJour(
                     jour: jour,
                     plages: _plages.where((p) => p.jour == jour).toList(),
+                    premiere: jour == 1,
+                    derniere: jour == 7,
                     onAjouter: () => _ajouter(jour),
                     onModifier: _modifier,
                     onSupprimer: _supprimer,
@@ -432,8 +435,10 @@ class _PiluleMedecin extends StatelessWidget {
   }
 }
 
-/// Carte d'un jour : ses plages horaires, avec les 4 actions de la
-/// secrétaire (ajouter / modifier / supprimer / valider).
+/// Ligne d'un jour (style « filet », point 4) : ses plages horaires,
+/// avec les 4 actions de la secrétaire (ajouter / modifier / supprimer /
+/// valider). Les 7 jours forment un seul bloc réglé séparé par des
+/// traits 1 px (plus de cartes individuelles avec marge).
 class _CarteJour extends StatelessWidget {
   final int jour;
   final List<Disponibilite> plages;
@@ -442,6 +447,10 @@ class _CarteJour extends StatelessWidget {
   final Future<void> Function(Disponibilite) onSupprimer;
   final Future<void> Function(Disponibilite) onBasculer;
 
+  /// Position dans le bloc des 7 jours : rayons haut / bas.
+  final bool premiere;
+  final bool derniere;
+
   const _CarteJour({
     required this.jour,
     required this.plages,
@@ -449,13 +458,16 @@ class _CarteJour extends StatelessWidget {
     required this.onModifier,
     required this.onSupprimer,
     required this.onBasculer,
+    this.premiere = false,
+    this.derniere = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return CarteMedigo(
-      margin: const EdgeInsets.only(bottom: 10),
+    return LigneFiletSpec(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      premiere: premiere,
+      derniere: derniere,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

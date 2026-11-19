@@ -40,6 +40,16 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
   Set<String> _idsNonTermines = {};
   String? _erreur;
 
+  /// (AJOUT) Contenu de la corbeille du médecin (RDV + date de mise à
+  /// la corbeille).
+  List<({RendezVous rdv, DateTime corbeilleLe})> _corbeille = [];
+
+  /// Vrai dès la première ouverture de l'onglet Corbeille : la
+  /// corbeille n'est téléchargée (et rafraîchie toutes les 5 s) qu'à
+  /// partir de ce moment-là, pour ne pas ajouter une requête Firestore
+  /// inutile à chaque chargement tant que l'utilisateur n'y est pas allé.
+  bool _corbeilleOuverte = false;
+
   /// Timer qui recharge automatiquement les données toutes les 5 s.
   /// Permet au médecin de voir les nouveaux rendez-vous (confirmés
   /// par la secrétaire) sans rafraîchir manuellement.
@@ -91,6 +101,11 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       // dans l'écran d'accueil si besoin.
       final rendezVous = await _service.getTousRendezVous(medecin.id);
       final stats = await _service.getStatistiques(medecin.id);
+      // (AJOUT) Corbeille : seulement après la première ouverture de
+      // l'onglet (cf. _corbeilleOuverte).
+      final corbeille = _corbeilleOuverte
+          ? await _service.getCorbeille(medecin.id)
+          : <({RendezVous rdv, DateTime corbeilleLe})>[];
       // Drapeaux « consultation non terminée » (affichage « Non
       // terminé » en style neutre dans les écrans).
       final idsNonTermines =
@@ -171,6 +186,7 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
           _rendezVousVisibles = visibles;
           _stats = stats;
           _idsNonTermines = idsNonTermines;
+          _corbeille = corbeille;
           // On ne réécrit la bannière QUE s'il y a une nouveauté :
           // un rechargement « vide » ne doit pas effacer une bannière
           // que l'utilisateur n'a pas encore fermée.
@@ -203,6 +219,58 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
     await _service.terminerRendezVous(rdv.id);
     await _charger();
     if (mounted) messageFlash(context, 'Consultation terminée');
+  }
+
+  // ── Corbeille (ajout) ────────────────────────────────────────────
+
+  Future<void> _mettreALaCorbeille(RendezVous rdv) async {
+    await _service.mettreALaCorbeille(rdv.id);
+    await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous mis à la corbeille');
+  }
+
+  Future<void> _restaurer(RendezVous rdv) async {
+    await _service.restaurer(rdv.id);
+    await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous restauré');
+  }
+
+  Future<void> _supprimerDefinitivement(RendezVous rdv) async {
+    await _service.supprimerDefinitivement(rdv.id);
+    await _charger();
+    if (mounted) {
+      messageFlash(context, 'Rendez-vous supprimé définitivement');
+    }
+  }
+
+  /// Ouverture de l'onglet Corbeille : purge à 30 jours (sans Cloud
+  /// Functions : elle part du client, à chaque ouverture — pas à chaque
+  /// rafraîchissement des 5 s), puis rechargement. En pratique la
+  /// corbeille du médecin ne contient que des « terminé » (jamais
+  /// purgés) : la purge renverra 0 dans le cas courant.
+  Future<void> _ouvrirCorbeille() async {
+    _corbeilleOuverte = true;
+    var purges = 0;
+    try {
+      purges = await _service.purgerCorbeille(_medecin!.id);
+    } catch (_) {
+      if (mounted) {
+        messageFlash(
+          context,
+          'Purge automatique impossible pour le moment',
+          succes: false,
+        );
+      }
+    }
+    await _charger();
+    if (mounted && purges > 0) {
+      messageFlash(
+        context,
+        purges == 1
+            ? '1 rendez-vous supprimé de la corbeille'
+            : '$purges rendez-vous supprimés de la corbeille',
+      );
+    }
   }
 
   Future<void> _deconnexion() async {
@@ -286,6 +354,11 @@ class _MedecinHomeLoaderState extends State<MedecinHomeLoader> {
       onRafraichir: _charger,
       onNonTermineRendezVous: _nonTermine,
       onTerminerRendezVous: _terminer,
+      corbeille: _corbeille,
+      onOuvrirCorbeille: _ouvrirCorbeille,
+      onMettreALaCorbeille: _mettreALaCorbeille,
+      onRestaurerRendezVous: _restaurer,
+      onSupprimerRendezVous: _supprimerDefinitivement,
       onDeconnexion: _deconnexion,
     );
   }

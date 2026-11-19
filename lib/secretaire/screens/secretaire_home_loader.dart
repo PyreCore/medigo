@@ -30,6 +30,15 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
   Map<String, int> _stats = {};
   String? _erreur;
 
+  /// (AJOUT) Contenu de la corbeille (RDV + date de mise à la corbeille).
+  List<({RendezVous rdv, DateTime corbeilleLe})> _corbeille = [];
+
+  /// Vrai dès la première ouverture de l'onglet Corbeille : la
+  /// corbeille n'est téléchargée (et rafraîchie toutes les 5 s) qu'à
+  /// partir de ce moment-là, pour ne pas ajouter une requête Firestore
+  /// inutile à chaque chargement tant que l'utilisateur n'y est pas allé.
+  bool _corbeilleOuverte = false;
+
   /// Timer qui recharge automatiquement les données toutes les 5 s.
   /// Permet à la secrétaire de voir les nouvelles demandes sans
   /// rafraîchir manuellement la page.
@@ -72,6 +81,11 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       // dans l'éconglet Rendez-vous si besoin.
       final rendezVous = await _service.getTousRendezVous(hopitalId);
       final stats = await _service.getStatistiques(hopitalId);
+      // (AJOUT) Corbeille : seulement après la première ouverture de
+      // l'onglet (cf. _corbeilleOuverte).
+      final corbeille = _corbeilleOuverte
+          ? await _service.getCorbeille(hopitalId)
+          : <({RendezVous rdv, DateTime corbeilleLe})>[];
 
       // 'totalPatients' n'est pas calculé par le service (compter demanderait
       // une requête Firestore de plus) : on connaît déjà le nombre exact de
@@ -93,6 +107,7 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
           _medecins = medecins;
           _rendezVous = rendezVous;
           _stats = statistiques;
+          _corbeille = corbeille;
         });
 
         // Notification si de nouvelles demandes sont arrivées
@@ -175,6 +190,58 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
     if (mounted) messageFlash(context, 'Rendez-vous annulé');
   }
 
+  // ── Corbeille (ajout) ────────────────────────────────────────────
+
+  Future<void> _mettreALaCorbeille(RendezVous rdv) async {
+    await _service.mettreALaCorbeille(rdv.id);
+    await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous mis à la corbeille');
+  }
+
+  Future<void> _restaurer(RendezVous rdv) async {
+    await _service.restaurer(rdv.id);
+    await _charger();
+    if (mounted) messageFlash(context, 'Rendez-vous restauré');
+  }
+
+  Future<void> _supprimerDefinitivement(RendezVous rdv) async {
+    await _service.supprimerDefinitivement(rdv.id);
+    await _charger();
+    if (mounted) {
+      messageFlash(context, 'Rendez-vous supprimé définitivement');
+    }
+  }
+
+  /// Ouverture de l'onglet Corbeille : purge à 30 jours (sans Cloud
+  /// Functions : elle part du client, à chaque ouverture — pas à chaque
+  /// rafraîchissement des 5 s), puis rechargement. Un échec de purge
+  /// n'écrase pas l'écran : message d'erreur discret, la liste s'affiche
+  /// quand même.
+  Future<void> _ouvrirCorbeille() async {
+    _corbeilleOuverte = true;
+    var purges = 0;
+    try {
+      purges = await _service.purgerCorbeille(_secretaire!.hopitalId);
+    } catch (_) {
+      if (mounted) {
+        messageFlash(
+          context,
+          'Purge automatique impossible pour le moment',
+          succes: false,
+        );
+      }
+    }
+    await _charger();
+    if (mounted && purges > 0) {
+      messageFlash(
+        context,
+        purges == 1
+            ? '1 rendez-vous supprimé de la corbeille'
+            : '$purges rendez-vous supprimés de la corbeille',
+      );
+    }
+  }
+
   Future<void> _deconnexion() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
@@ -249,6 +316,11 @@ class _SecretaireHomeLoaderState extends State<SecretaireHomeLoader> {
       onConfirmerRendezVous: _confirmer,
       onAnnulerRendezVous: _annuler,
       onRefuserRendezVous: _refuser,
+      corbeille: _corbeille,
+      onOuvrirCorbeille: _ouvrirCorbeille,
+      onMettreALaCorbeille: _mettreALaCorbeille,
+      onRestaurerRendezVous: _restaurer,
+      onSupprimerRendezVous: _supprimerDefinitivement,
       onRafraichir: _charger,
       onDeconnexion: _deconnexion,
     );

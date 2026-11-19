@@ -281,7 +281,13 @@ class BoutonPrincipal extends StatelessWidget {
         shape: const StadiumBorder(),
         minimumSize: Size(pleineLargeur ? double.infinity : 0, hauteur),
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        // (CORRECTIF) Pas de textStyle ici : styleFrom(textStyle:) passe
+        // par Material(textStyle:), qui REMPLACE le DefaultTextStyle du
+        // thème à l'intérieur du bouton — la famille de police du thème
+        // est alors perdue (libellés rendus en « Ahem » (blocs) dans les
+        // tests/goldens, police par défaut en prod). Le style du libellé
+        // est porté par le Text ci-dessous : il se MERGE sur le
+        // DefaultTextStyle du bouton, qui garde la famille du thème.
       ),
       // Pas d'icône : libellé seul (parti pris « zéro emoji/icône »
       // de l'interface, purement textuel et international).
@@ -294,7 +300,13 @@ class BoutonPrincipal extends StatelessWidget {
                 color: Colors.white,
               ),
             )
-          : Text(texte),
+          : Text(
+              texte,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
 
     // AnimatedOpacity : fondu rapide quand l'état change (actif ↔ spin).
@@ -343,9 +355,18 @@ class BoutonContour extends StatelessWidget {
           minimumSize: Size(pleineLargeur ? double.infinity : 0, hauteur),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: const StadiumBorder(),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          // (CORRECTIF) Pas de textStyle ici : styleFrom(textStyle:) passe
+          // par Material(textStyle:), qui REMPLACE le DefaultTextStyle du
+          // thème à l'intérieur du bouton — la famille de police du thème
+          // est alors perdue (libellés en « Ahem » (blocs) dans les
+          // goldens, police plateforme en prod). Le style est porté par
+          // le Text ci-dessous : il se MERGE sur le DefaultTextStyle du
+          // bouton, qui garde la famille du thème.
         ),
-        child: Text(texte),
+        child: Text(
+          texte,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
